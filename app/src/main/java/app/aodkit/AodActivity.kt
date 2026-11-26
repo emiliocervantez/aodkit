@@ -95,8 +95,14 @@ class AodActivity : ComponentActivity() {
                         shortcuts = prefs.shortcuts,
                         // Samsung switches the sensor off while we cover the Lock Screen; step aside
                         // the moment a finger lands on it so the Lock Screen's sensor takes over.
-                        sensorY = prefs.sensorY.takeIf { prefs.fingerprintUnlock },
+                        sensorY = prefs.sensorY.takeIf { prefs.unlockMethod == UnlockMethod.FINGERPRINT },
                         onSensorTouch = ::finish,
+                        onSwipeUp = when (prefs.unlockMethod) {
+                            UnlockMethod.FINGERPRINT -> null
+                            UnlockMethod.SWIPE_LOCK_SCREEN -> ::finish
+                            // Brings up Samsung's PIN/pattern screen; on cancel the AOD Screen stays.
+                            UnlockMethod.SWIPE_PIN -> ({ unlockThen {} })
+                        },
                         onExit = ::finish,
                         onDismiss = AodNotificationListener::dismiss,
                         onOpen = { n -> n.contentIntent?.let { unlockThen { sendContentIntent(it) } } },

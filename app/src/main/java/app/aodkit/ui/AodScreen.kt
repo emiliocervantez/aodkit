@@ -15,6 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -37,6 +38,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,6 +67,8 @@ private const val MAX_ICONS = 6
 private const val MINUTE_MS = 60_000L
 private const val REVEAL_MS = 300
 
+private val SWIPE_UP_DISTANCE = 100.dp
+
 /** Matches the A56 sensor's touch rect (225 px at 450 dpi). */
 private val SENSOR_ZONE = 80.dp
 
@@ -80,6 +84,8 @@ fun AodScreen(
     /** Fingerprint sensor centre as a fraction of the screen height, or null when the feature is off. */
     sensorY: Float?,
     onSensorTouch: () -> Unit,
+    /** Null when swipe-to-unlock is off. */
+    onSwipeUp: (() -> Unit)?,
     onExit: () -> Unit,
     onDismiss: (String) -> Unit,
     onOpen: (AodNotification) -> Unit,
@@ -92,13 +98,24 @@ fun AodScreen(
     LaunchedEffect(selectedApp) { if (selectedApp == null) selectedPackage = null }
     val now = rememberMinuteTicker()
     val contentAlpha by animateFloatAsState(if (revealed) 1f else 0f, tween(REVEAL_MS), label = "reveal")
+    val swipeEnabled = onSwipeUp != null
+    val currentOnSwipeUp by rememberUpdatedState(onSwipeUp)
 
     Box(
         Modifier
             .fillMaxSize()
             .background(Color.Black)
             .graphicsLayer { alpha = contentAlpha }
-            .pointerInput(Unit) { detectTapGestures(onDoubleTap = { onExit() }) },
+            .pointerInput(Unit) { detectTapGestures(onDoubleTap = { onExit() }) }
+            .pointerInput(swipeEnabled) {
+                if (!swipeEnabled) return@pointerInput
+                var dragged = 0f
+                detectVerticalDragGestures(
+                    onDragStart = { dragged = 0f },
+                    onVerticalDrag = { _, dy -> dragged += dy },
+                    onDragEnd = { if (dragged < -SWIPE_UP_DISTANCE.toPx()) currentOnSwipeUp?.invoke() },
+                )
+            },
     ) {
         Column(
             Modifier

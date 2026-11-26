@@ -15,6 +15,18 @@ const val MAX_SHORTCUTS = 8
 /** What a power-button press does while the AOD Screen is showing. */
 enum class PowerButtonAction { DISPLAY_OFF, LOCK_SCREEN }
 
+/** How the user starts unlocking from the AOD Screen. */
+enum class UnlockMethod {
+    /** Touching the ring over the sensor closes the AOD Screen so the Lock Screen's sensor takes over. */
+    FINGERPRINT,
+
+    /** Swiping up closes the AOD Screen; the Lock Screen appears with its fingerprint sensor on. */
+    SWIPE_LOCK_SCREEN,
+
+    /** Swiping up asks Android to unlock, which brings up the PIN/pattern screen. */
+    SWIPE_PIN,
+}
+
 data class AodSettings(
     val enabled: Boolean = false,
     /** Shortcut package names, in display order. */
@@ -23,8 +35,7 @@ data class AodSettings(
     val powerButton: PowerButtonAction = PowerButtonAction.DISPLAY_OFF,
     /** Window brightness of the AOD Screen, 0..1. */
     val brightness: Float = DEFAULT_BRIGHTNESS,
-    /** Touching the fingerprint sensor area closes the AOD Screen so the Lock Screen's sensor can take over. */
-    val fingerprintUnlock: Boolean = true,
+    val unlockMethod: UnlockMethod = UnlockMethod.FINGERPRINT,
     /** Vertical centre of the in-display fingerprint sensor, as a fraction of the screen height. */
     val sensorY: Float = DEFAULT_SENSOR_Y,
 )
@@ -50,7 +61,9 @@ class SettingsStore(context: Context) {
                 ?.let { name -> PowerButtonAction.entries.firstOrNull { it.name == name } }
                 ?: PowerButtonAction.DISPLAY_OFF,
             brightness = p[BRIGHTNESS] ?: DEFAULT_BRIGHTNESS,
-            fingerprintUnlock = p[FINGERPRINT_UNLOCK] ?: true,
+            unlockMethod = p[UNLOCK_METHOD]
+                ?.let { name -> UnlockMethod.entries.firstOrNull { it.name == name } }
+                ?: UnlockMethod.FINGERPRINT,
             sensorY = p[SENSOR_Y] ?: DEFAULT_SENSOR_Y,
         )
     }
@@ -75,8 +88,8 @@ class SettingsStore(context: Context) {
         store.edit { it[BRIGHTNESS] = brightness.coerceIn(MIN_BRIGHTNESS, 1f) }
     }
 
-    suspend fun setFingerprintUnlock(enabled: Boolean) {
-        store.edit { it[FINGERPRINT_UNLOCK] = enabled }
+    suspend fun setUnlockMethod(method: UnlockMethod) {
+        store.edit { it[UNLOCK_METHOD] = method.name }
     }
 
     suspend fun setSensorY(y: Float) {
@@ -89,7 +102,7 @@ class SettingsStore(context: Context) {
         val HIDDEN_APPS = stringSetPreferencesKey("hidden_apps")
         val POWER_BUTTON = stringPreferencesKey("power_button")
         val BRIGHTNESS = floatPreferencesKey("brightness")
-        val FINGERPRINT_UNLOCK = booleanPreferencesKey("fingerprint_unlock")
+        val UNLOCK_METHOD = stringPreferencesKey("unlock_method")
         val SENSOR_Y = floatPreferencesKey("sensor_y")
     }
 }

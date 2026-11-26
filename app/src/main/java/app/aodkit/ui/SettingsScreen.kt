@@ -55,6 +55,7 @@ import app.aodkit.MAX_SHORTCUTS
 import app.aodkit.MIN_BRIGHTNESS
 import app.aodkit.PowerButtonAction
 import app.aodkit.SettingsStore
+import app.aodkit.UnlockMethod
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -147,20 +148,37 @@ fun SettingsScreen(store: SettingsStore, resumeCount: Int) {
                 PercentSlider(settings.brightness, MIN_BRIGHTNESS..1f) { scope.launch { store.setBrightness(it) } }
             }
 
-            item { SectionHeader("Fingerprint") }
-            item {
-                SettingRow(
-                    "Touch the sensor to unlock",
-                    "Samsung turns the sensor off while the AOD Screen is up. Touching the ring hands over to the lock screen.",
-                    trailing = {
-                        Switch(
-                            checked = settings.fingerprintUnlock,
-                            onCheckedChange = { scope.launch { store.setFingerprintUnlock(it) } },
+            item { SectionHeader("Unlock with") }
+            items(UnlockMethod.entries) { method ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .selectable(settings.unlockMethod == method) { scope.launch { store.setUnlockMethod(method) } }
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(selected = settings.unlockMethod == method, onClick = null)
+                    Column(Modifier.padding(start = 16.dp)) {
+                        Text(
+                            when (method) {
+                                UnlockMethod.FINGERPRINT -> "Fingerprint"
+                                UnlockMethod.SWIPE_LOCK_SCREEN -> "Swipe to lock screen"
+                                UnlockMethod.SWIPE_PIN -> "Swipe to PIN screen"
+                            },
                         )
-                    },
-                )
+                        Text(
+                            when (method) {
+                                UnlockMethod.FINGERPRINT -> "Touch the ring over the sensor, then touch the sensor again."
+                                UnlockMethod.SWIPE_LOCK_SCREEN -> "Swipe up shows the lock screen; then touch the fingerprint sensor."
+                                UnlockMethod.SWIPE_PIN -> "Swipe up opens the PIN screen; fingerprint and face work there too."
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
-            if (settings.fingerprintUnlock) {
+            if (settings.unlockMethod == UnlockMethod.FINGERPRINT) {
                 item {
                     Text(
                         "Sensor position (use Preview to line the ring up)",
