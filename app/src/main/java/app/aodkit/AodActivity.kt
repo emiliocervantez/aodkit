@@ -93,9 +93,13 @@ class AodActivity : ComponentActivity() {
                         revealed = contentRevealed,
                         apps = apps,
                         shortcuts = prefs.shortcuts,
+                        shortcutLayout = prefs.shortcutLayout,
+                        closeButtonDismisses = prefs.modalCloseAction == ModalCloseAction.DISMISS_ALL,
+                        modalAutoCloseMs = (prefs.modalAutoCloseSeconds * 1_000L).takeIf { prefs.modalAutoClose },
                         // Samsung switches the sensor off while we cover the Lock Screen; step aside
                         // the moment a finger lands on it so the Lock Screen's sensor takes over.
                         sensorY = prefs.sensorY.takeIf { prefs.unlockMethod == UnlockMethod.FINGERPRINT },
+                        showSensorRing = prefs.showSensorRing,
                         onSensorTouch = ::finish,
                         onSwipeUp = when (prefs.unlockMethod) {
                             UnlockMethod.FINGERPRINT -> null

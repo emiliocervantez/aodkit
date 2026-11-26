@@ -50,11 +50,14 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.getSystemService
 import androidx.core.net.toUri
 import app.aodkit.AodActivity
+import app.aodkit.AUTO_CLOSE_SECONDS_RANGE
 import app.aodkit.AodNotificationListener
 import app.aodkit.MAX_SHORTCUTS
 import app.aodkit.MIN_BRIGHTNESS
+import app.aodkit.ModalCloseAction
 import app.aodkit.PowerButtonAction
 import app.aodkit.SettingsStore
+import app.aodkit.ShortcutLayout
 import app.aodkit.UnlockMethod
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -180,6 +183,18 @@ fun SettingsScreen(store: SettingsStore, resumeCount: Int) {
             }
             if (settings.unlockMethod == UnlockMethod.FINGERPRINT) {
                 item {
+                    SettingRow(
+                        "Show circle over the sensor",
+                        "When hidden, touching the sensor spot still works.",
+                        trailing = {
+                            Switch(
+                                checked = settings.showSensorRing,
+                                onCheckedChange = { scope.launch { store.setShowSensorRing(it) } },
+                            )
+                        },
+                    )
+                }
+                item {
                     Text(
                         "Sensor position (use Preview to line the ring up)",
                         Modifier.padding(horizontal = 16.dp),
@@ -201,6 +216,66 @@ fun SettingsScreen(store: SettingsStore, resumeCount: Int) {
                 )
             }
             item { TextButton(onClick = { picker = Picker.SHORTCUTS }, Modifier.padding(horizontal = 8.dp)) { Text("Choose shortcuts") } }
+            items(ShortcutLayout.entries) { layout ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .selectable(settings.shortcutLayout == layout) { scope.launch { store.setShortcutLayout(layout) } }
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(selected = settings.shortcutLayout == layout, onClick = null)
+                    Text(
+                        when (layout) {
+                            ShortcutLayout.VERTICAL -> "Vertical: a column above the button"
+                            ShortcutLayout.HORIZONTAL -> "Horizontal: a row left of the button"
+                        },
+                        Modifier.padding(start = 16.dp),
+                    )
+                }
+            }
+
+            item { SectionHeader("✕ button in the notification window") }
+            items(ModalCloseAction.entries) { action ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .selectable(settings.modalCloseAction == action) { scope.launch { store.setModalCloseAction(action) } }
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(selected = settings.modalCloseAction == action, onClick = null)
+                    Text(
+                        when (action) {
+                            ModalCloseAction.CLOSE -> "Close the window"
+                            ModalCloseAction.DISMISS_ALL -> "Dismiss the notifications"
+                        },
+                        Modifier.padding(start = 16.dp),
+                    )
+                }
+            }
+
+            item {
+                SettingRow(
+                    "Close after inactivity",
+                    if (settings.modalAutoClose) {
+                        "Closes the notification window after ${settings.modalAutoCloseSeconds} s without a touch."
+                    } else {
+                        "The notification window stays open until you close it."
+                    },
+                    trailing = {
+                        Switch(
+                            checked = settings.modalAutoClose,
+                            onCheckedChange = { scope.launch { store.setModalAutoClose(it) } },
+                        )
+                    },
+                )
+            }
+            if (settings.modalAutoClose) {
+                item {
+                    SecondsSlider(settings.modalAutoCloseSeconds) { scope.launch { store.setModalAutoCloseSeconds(it) } }
+                }
+            }
 
             item { SectionHeader("Hidden apps") }
             item {
@@ -308,6 +383,27 @@ private fun PercentSlider(saved: Float, range: ClosedFloatingPointRange<Float>, 
             modifier = Modifier.weight(1f),
         )
         Text("${(value * 100).roundToInt()}%", Modifier.padding(start = 16.dp).width(48.dp))
+    }
+}
+
+/** Snaps to 10-second steps across [AUTO_CLOSE_SECONDS_RANGE]; saves when the drag ends. */
+@Composable
+private fun SecondsSlider(saved: Int, onSave: (Int) -> Unit) {
+    val range = AUTO_CLOSE_SECONDS_RANGE
+    var value by remember(saved) { mutableFloatStateOf(saved.toFloat()) }
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Slider(
+            value = value,
+            onValueChange = { value = it },
+            onValueChangeFinished = { onSave(value.roundToInt()) },
+            valueRange = range.first.toFloat()..range.last.toFloat(),
+            steps = (range.last - range.first) / 10 - 1,
+            modifier = Modifier.weight(1f),
+        )
+        Text("${value.roundToInt()} s", Modifier.padding(start = 16.dp).width(48.dp))
     }
 }
 

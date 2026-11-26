@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import app.aodkit.AodNotification
 import app.aodkit.AppNotifications
+import app.aodkit.ShortcutLayout
 import kotlinx.coroutines.delay
 import java.util.Date
 
@@ -68,6 +69,8 @@ private const val MINUTE_MS = 60_000L
 private const val REVEAL_MS = 300
 
 private val SWIPE_UP_DISTANCE = 100.dp
+internal val LAUNCHER_SIZE = 56.dp
+internal val LAUNCHER_PADDING = 24.dp
 
 /** Matches the A56 sensor's touch rect (225 px at 450 dpi). */
 private val SENSOR_ZONE = 80.dp
@@ -81,8 +84,13 @@ fun AodScreen(
     revealed: Boolean,
     apps: List<AppNotifications>,
     shortcuts: List<String>,
+    shortcutLayout: ShortcutLayout,
+    closeButtonDismisses: Boolean,
+    /** Null when the Notification Modal should stay open until closed. */
+    modalAutoCloseMs: Long?,
     /** Fingerprint sensor centre as a fraction of the screen height, or null when the feature is off. */
     sensorY: Float?,
+    showSensorRing: Boolean,
     onSensorTouch: () -> Unit,
     /** Null when swipe-to-unlock is off. */
     onSwipeUp: (() -> Unit)?,
@@ -135,15 +143,15 @@ fun AodScreen(
             NotificationIconRow(apps, onClick = { selectedPackage = it })
         }
 
-        // Declared before the modal and sheet so their scrims sit on top and take touches first.
-        if (sensorY != null) SensorZone(sensorY, onSensorTouch)
+        // Declared before the modal and the fan so their scrims sit on top and take touches first.
+        if (sensorY != null) SensorZone(sensorY, showSensorRing, onSensorTouch)
 
         if (shortcuts.isNotEmpty()) {
             ShortcutLauncherButton(
                 Modifier
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding()
-                    .padding(24.dp),
+                    .padding(LAUNCHER_PADDING),
                 onClick = { shortcutsOpen = true },
             )
         }
@@ -151,6 +159,8 @@ fun AodScreen(
         if (selectedApp != null) {
             NotificationModal(
                 app = selectedApp,
+                closeButtonDismisses = closeButtonDismisses,
+                autoCloseMs = modalAutoCloseMs,
                 onClose = { selectedPackage = null },
                 onDismiss = onDismiss,
                 onOpen = onOpen,
@@ -158,8 +168,9 @@ fun AodScreen(
         }
 
         if (shortcutsOpen) {
-            ShortcutSheet(
+            ShortcutFan(
                 shortcuts = shortcuts,
+                layout = shortcutLayout,
                 onClose = { shortcutsOpen = false },
                 onLaunch = {
                     shortcutsOpen = false
@@ -267,16 +278,16 @@ private fun NotificationIconRow(apps: List<AppNotifications>, onClick: (String) 
     }
 }
 
-/** A faint ring over the in-display fingerprint sensor; any touch landing on it fires [onTouch]. */
+/** The in-display fingerprint sensor's spot, optionally marked by a faint ring; any touch on it fires [onTouch]. */
 @Composable
-private fun SensorZone(centerY: Float, onTouch: () -> Unit) {
+private fun SensorZone(centerY: Float, showRing: Boolean, onTouch: () -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         Box(
             Modifier
                 .align(Alignment.TopCenter)
                 .offset(y = maxHeight * centerY - SENSOR_ZONE / 2)
                 .size(SENSOR_ZONE)
-                .border(1.dp, AodGrey.copy(alpha = 0.5f), CircleShape)
+                .then(if (showRing) Modifier.border(1.dp, AodGrey.copy(alpha = 0.5f), CircleShape) else Modifier)
                 .pointerInput(Unit) {
                     awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false)
@@ -289,10 +300,10 @@ private fun SensorZone(centerY: Float, onTouch: () -> Unit) {
 
 /** The Shortcut Launcher: three lines of decreasing length, as in the reference screenshot. */
 @Composable
-private fun ShortcutLauncherButton(modifier: Modifier, onClick: () -> Unit) {
+internal fun ShortcutLauncherButton(modifier: Modifier, onClick: () -> Unit) {
     Box(
         modifier
-            .size(56.dp)
+            .size(LAUNCHER_SIZE)
             .clip(CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,

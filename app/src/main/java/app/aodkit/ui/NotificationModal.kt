@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -44,7 +45,7 @@ import app.aodkit.AppNotifications
 import kotlinx.coroutines.delay
 import java.util.Date
 
-private const val IDLE_CLOSE_MS = 30_000L
+private const val MAX_HEIGHT_FRACTION = 0.8f
 internal val PanelColor = Color(0xFF1C1C1C)
 internal val Scrim = Color.Black.copy(alpha = 0.7f)
 
@@ -55,6 +56,10 @@ internal val Scrim = Color.Black.copy(alpha = 0.7f)
 @Composable
 fun NotificationModal(
     app: AppNotifications,
+    /** When true the ✕ button dismisses all of [app]'s notifications before closing. */
+    closeButtonDismisses: Boolean,
+    /** Close after this long without a touch; null keeps the modal open until the user closes it. */
+    autoCloseMs: Long?,
     onClose: () -> Unit,
     onDismiss: (String) -> Unit,
     onOpen: (AodNotification) -> Unit,
@@ -62,8 +67,9 @@ fun NotificationModal(
     val context = LocalContext.current
     val label = remember(app.packageName) { appLabel(context, app.packageName) }
     var lastInteraction by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(lastInteraction) {
-        delay(IDLE_CLOSE_MS)
+    LaunchedEffect(lastInteraction, autoCloseMs) {
+        if (autoCloseMs == null) return@LaunchedEffect
+        delay(autoCloseMs)
         onClose()
     }
     BackHandler(onBack = onClose)
@@ -87,7 +93,8 @@ fun NotificationModal(
             Modifier
                 .padding(24.dp)
                 .fillMaxWidth()
-                .heightIn(max = 560.dp)
+                // Grows with its content; beyond this the list scrolls.
+                .heightIn(max = LocalConfiguration.current.screenHeightDp.dp * MAX_HEIGHT_FRACTION)
                 .background(PanelColor, RoundedCornerShape(24.dp))
                 .clickable(interactionSource = null, indication = null) {} // Taps inside don't close.
                 .padding(20.dp),
@@ -96,7 +103,12 @@ fun NotificationModal(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 AppIcon(app.packageName, Modifier.size(32.dp))
                 Text(label, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, maxLines = 1)
-                IconButton(onClick = onClose) { Text("✕", style = MaterialTheme.typography.titleMedium) }
+                IconButton(
+                    onClick = {
+                        if (closeButtonDismisses) app.notifications.forEach { onDismiss(it.key) }
+                        onClose()
+                    },
+                ) { Text("✕", style = MaterialTheme.typography.titleMedium) }
             }
             LazyColumn(verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 items(app.notifications, key = { it.key }) { n ->
@@ -135,7 +147,7 @@ private fun NotificationItem(n: AodNotification, onDismiss: () -> Unit, onOpen: 
                     },
                 )
             }
-            n.text != null -> Text(n.text, maxLines = 8, overflow = TextOverflow.Ellipsis)
+            n.text != null -> Text(n.text)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             TextButton(onClick = onDismiss) { Text("Dismiss") }
