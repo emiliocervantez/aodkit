@@ -10,10 +10,14 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -61,6 +65,9 @@ private const val MAX_ICONS = 6
 private const val MINUTE_MS = 60_000L
 private const val REVEAL_MS = 300
 
+/** Matches the A56 sensor's touch rect (225 px at 450 dpi). */
+private val SENSOR_ZONE = 80.dp
+
 /** Burn-in protection: the content block steps through these offsets (dp), one per minute. */
 private val burnInSteps = listOf(0 to 0, 4 to 2, 2 to -4, -4 to -2, -2 to 4, 4 to -4, -4 to 4, 0 to -6)
 
@@ -70,6 +77,9 @@ fun AodScreen(
     revealed: Boolean,
     apps: List<AppNotifications>,
     shortcuts: List<String>,
+    /** Fingerprint sensor centre as a fraction of the screen height, or null when the feature is off. */
+    sensorY: Float?,
+    onSensorTouch: () -> Unit,
     onExit: () -> Unit,
     onDismiss: (String) -> Unit,
     onOpen: (AodNotification) -> Unit,
@@ -107,6 +117,9 @@ fun AodScreen(
             Spacer(Modifier.height(40.dp))
             NotificationIconRow(apps, onClick = { selectedPackage = it })
         }
+
+        // Declared before the modal and sheet so their scrims sit on top and take touches first.
+        if (sensorY != null) SensorZone(sensorY, onSensorTouch)
 
         if (shortcuts.isNotEmpty()) {
             ShortcutLauncherButton(
@@ -234,6 +247,26 @@ private fun NotificationIconRow(apps: List<AppNotifications>, onClick: (String) 
         if (apps.size > MAX_ICONS) {
             Text("+${apps.size - MAX_ICONS}", color = AodGrey, fontSize = 20.sp)
         }
+    }
+}
+
+/** A faint ring over the in-display fingerprint sensor; any touch landing on it fires [onTouch]. */
+@Composable
+private fun SensorZone(centerY: Float, onTouch: () -> Unit) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        Box(
+            Modifier
+                .align(Alignment.TopCenter)
+                .offset(y = maxHeight * centerY - SENSOR_ZONE / 2)
+                .size(SENSOR_ZONE)
+                .border(1.dp, AodGrey.copy(alpha = 0.5f), CircleShape)
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        onTouch()
+                    }
+                },
+        )
     }
 }
 

@@ -23,7 +23,14 @@ data class AodSettings(
     val powerButton: PowerButtonAction = PowerButtonAction.DISPLAY_OFF,
     /** Window brightness of the AOD Screen, 0..1. */
     val brightness: Float = DEFAULT_BRIGHTNESS,
+    /** Touching the fingerprint sensor area closes the AOD Screen so the Lock Screen's sensor can take over. */
+    val fingerprintUnlock: Boolean = true,
+    /** Vertical centre of the in-display fingerprint sensor, as a fraction of the screen height. */
+    val sensorY: Float = DEFAULT_SENSOR_Y,
 )
+
+/** Galaxy A56: the sensor's touch rect is 427,1970–652,2195 on a 1080x2340 screen. */
+const val DEFAULT_SENSOR_Y = 0.89f
 
 /** Close to the Samsung system AOD's own level (0.19 on a Galaxy A56). */
 const val DEFAULT_BRIGHTNESS = 0.2f
@@ -43,6 +50,8 @@ class SettingsStore(context: Context) {
                 ?.let { name -> PowerButtonAction.entries.firstOrNull { it.name == name } }
                 ?: PowerButtonAction.DISPLAY_OFF,
             brightness = p[BRIGHTNESS] ?: DEFAULT_BRIGHTNESS,
+            fingerprintUnlock = p[FINGERPRINT_UNLOCK] ?: true,
+            sensorY = p[SENSOR_Y] ?: DEFAULT_SENSOR_Y,
         )
     }
 
@@ -66,11 +75,21 @@ class SettingsStore(context: Context) {
         store.edit { it[BRIGHTNESS] = brightness.coerceIn(MIN_BRIGHTNESS, 1f) }
     }
 
+    suspend fun setFingerprintUnlock(enabled: Boolean) {
+        store.edit { it[FINGERPRINT_UNLOCK] = enabled }
+    }
+
+    suspend fun setSensorY(y: Float) {
+        store.edit { it[SENSOR_Y] = y.coerceIn(0f, 1f) }
+    }
+
     private companion object {
         val ENABLED = booleanPreferencesKey("enabled")
         val SHORTCUTS = stringPreferencesKey("shortcuts")
         val HIDDEN_APPS = stringSetPreferencesKey("hidden_apps")
         val POWER_BUTTON = stringPreferencesKey("power_button")
         val BRIGHTNESS = floatPreferencesKey("brightness")
+        val FINGERPRINT_UNLOCK = booleanPreferencesKey("fingerprint_unlock")
+        val SENSOR_Y = floatPreferencesKey("sensor_y")
     }
 }

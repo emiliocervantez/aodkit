@@ -144,7 +144,33 @@ fun SettingsScreen(store: SettingsStore, resumeCount: Int) {
 
             item { SectionHeader("AOD brightness") }
             item {
-                BrightnessSlider(settings.brightness) { scope.launch { store.setBrightness(it) } }
+                PercentSlider(settings.brightness, MIN_BRIGHTNESS..1f) { scope.launch { store.setBrightness(it) } }
+            }
+
+            item { SectionHeader("Fingerprint") }
+            item {
+                SettingRow(
+                    "Touch the sensor to unlock",
+                    "Samsung turns the sensor off while the AOD Screen is up. Touching the ring hands over to the lock screen.",
+                    trailing = {
+                        Switch(
+                            checked = settings.fingerprintUnlock,
+                            onCheckedChange = { scope.launch { store.setFingerprintUnlock(it) } },
+                        )
+                    },
+                )
+            }
+            if (settings.fingerprintUnlock) {
+                item {
+                    Text(
+                        "Sensor position (use Preview to line the ring up)",
+                        Modifier.padding(horizontal = 16.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                item {
+                    PercentSlider(settings.sensorY, SENSOR_Y_RANGE) { scope.launch { store.setSensorY(it) } }
+                }
             }
 
             item { SectionHeader("Shortcuts (${settings.shortcuts.size}/$MAX_SHORTCUTS)") }
@@ -245,9 +271,12 @@ private fun PermissionRow(title: String, subtitle: String, granted: Boolean, onC
     )
 }
 
+/** The sensor sits in the lower part of the screen on every phone with one under the display. */
+private val SENSOR_Y_RANGE = 0.5f..1f
+
 /** Saves only when the drag ends, so the store isn't written on every frame. */
 @Composable
-private fun BrightnessSlider(saved: Float, onSave: (Float) -> Unit) {
+private fun PercentSlider(saved: Float, range: ClosedFloatingPointRange<Float>, onSave: (Float) -> Unit) {
     var value by remember(saved) { mutableFloatStateOf(saved) }
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -257,7 +286,7 @@ private fun BrightnessSlider(saved: Float, onSave: (Float) -> Unit) {
             value = value,
             onValueChange = { value = it },
             onValueChangeFinished = { onSave(value) },
-            valueRange = MIN_BRIGHTNESS..1f,
+            valueRange = range,
             modifier = Modifier.weight(1f),
         )
         Text("${(value * 100).roundToInt()}%", Modifier.padding(start = 16.dp).width(48.dp))

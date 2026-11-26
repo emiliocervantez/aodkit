@@ -24,7 +24,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
@@ -67,9 +66,10 @@ class AodActivity : ComponentActivity() {
         setTurnScreenOn(true)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val settings = SettingsStore(this).settings
-        // Read synchronously so the very first frame already has the right level. The listener in
-        // this process has loaded the store already, so this is an in-memory read.
-        applyBrightness(runBlocking { settings.first() }.brightness)
+        // Read synchronously so the very first frame already has the right brightness and layout. The
+        // listener in this process has loaded the store already, so this is an in-memory read.
+        val initialSettings = runBlocking { settings.first() }
+        applyBrightness(initialSettings.brightness)
         lifecycleScope.launch {
             settings.map { it.brightness }.distinctUntilChanged().collect(::applyBrightness)
         }
@@ -86,13 +86,17 @@ class AodActivity : ComponentActivity() {
 
         setContent {
             val apps by NotificationRepository.apps.collectAsState()
-            val shortcuts by remember { settings.map { it.shortcuts } }.collectAsState(initial = emptyList())
+            val prefs by settings.collectAsState(initial = initialSettings)
             MaterialTheme(colorScheme = darkColorScheme()) {
                 CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
                     AodScreen(
                         revealed = contentRevealed,
                         apps = apps,
-                        shortcuts = shortcuts,
+                        shortcuts = prefs.shortcuts,
+                        // Samsung switches the sensor off while we cover the Lock Screen; step aside
+                        // the moment a finger lands on it so the Lock Screen's sensor takes over.
+                        sensorY = prefs.sensorY.takeIf { prefs.fingerprintUnlock },
+                        onSensorTouch = ::finish,
                         onExit = ::finish,
                         onDismiss = AodNotificationListener::dismiss,
                         onOpen = { n -> n.contentIntent?.let { unlockThen { sendContentIntent(it) } } },
