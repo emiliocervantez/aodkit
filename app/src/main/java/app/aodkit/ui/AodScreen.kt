@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -66,6 +67,7 @@ import kotlin.random.Random
 
 internal val AodGrey = Color(0xFF8E8E8E)
 private const val MAX_ICONS = 6
+private const val MAX_BADGE_COUNT = 99
 private const val MINUTE_MS = 60_000L
 private const val REVEAL_MS = 300
 
@@ -112,6 +114,8 @@ fun AodScreen(
     shortcutLayout: ShortcutLayout,
     /** Jump the content block to a random spot every minute; off keeps it centred with a small shift. */
     moveContent: Boolean,
+    /** Count badge on Notification Icons of apps with more than one notification. */
+    showNotificationCount: Boolean,
     closeButtonDismisses: Boolean,
     /** Null when the Notification Modal should stay open until closed. */
     modalAutoCloseMs: Long?,
@@ -171,7 +175,7 @@ fun AodScreen(
             Spacer(Modifier.height(16.dp))
             BatteryLine()
             Spacer(Modifier.height(40.dp))
-            NotificationIconRow(apps, onClick = { selectedPackage = it })
+            NotificationIconRow(apps, showNotificationCount, onClick = { selectedPackage = it })
         }
 
         // Declared before the modal and the fan so their scrims sit on top and take touches first.
@@ -291,21 +295,45 @@ private fun Intent.batteryPercent(): Int? {
 }
 
 @Composable
-private fun NotificationIconRow(apps: List<AppNotifications>, onClick: (String) -> Unit) {
+private fun NotificationIconRow(apps: List<AppNotifications>, showCount: Boolean, onClick: (String) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(28.dp), verticalAlignment = Alignment.CenterVertically) {
         apps.take(MAX_ICONS).forEach { app ->
-            AppIcon(
-                packageName = app.packageName,
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .clickable { onClick(app.packageName) },
-                grayscale = true,
-            )
+            Box {
+                AppIcon(
+                    packageName = app.packageName,
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .clickable { onClick(app.packageName) },
+                    grayscale = true,
+                )
+                val count = app.notifications.size
+                if (showCount && count > 1) CountBadge(count, Modifier.align(Alignment.TopStart).offset(x = (-6).dp, y = (-6).dp))
+            }
         }
         if (apps.size > MAX_ICONS) {
             Text("+${apps.size - MAX_ICONS}", color = AodGrey, fontSize = 20.sp)
         }
+    }
+}
+
+/** Number of an app's notifications, grey on black like the rest of the AOD Screen. */
+@Composable
+private fun CountBadge(count: Int, modifier: Modifier) {
+    Box(
+        modifier
+            .defaultMinSize(minWidth = 20.dp, minHeight = 20.dp)
+            .background(AodGrey, CircleShape)
+            .border(2.dp, Color.Black, CircleShape) // Separates the badge from the icon edge.
+            .padding(horizontal = 5.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            if (count > MAX_BADGE_COUNT) "$MAX_BADGE_COUNT+" else "$count",
+            color = Color.Black,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
 

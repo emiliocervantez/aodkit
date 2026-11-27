@@ -45,6 +45,8 @@ data class AodSettings(
     val shortcuts: List<String> = emptyList(),
     val shortcutLayout: ShortcutLayout = ShortcutLayout.VERTICAL,
     val hiddenApps: Set<String> = emptySet(),
+    /** Show a count badge on a Notification Icon when its app has more than one notification. */
+    val showNotificationCount: Boolean = true,
     /** Ignore "hide content" lock-screen settings on the AOD Screen (SECRET stays hidden). */
     val showHiddenContent: Boolean = false,
     val modalCloseAction: ModalCloseAction = ModalCloseAction.CLOSE,
@@ -86,6 +88,7 @@ class SettingsStore(context: Context) {
                 ?.let { name -> ShortcutLayout.entries.firstOrNull { it.name == name } }
                 ?: ShortcutLayout.VERTICAL,
             hiddenApps = p[HIDDEN_APPS].orEmpty(),
+            showNotificationCount = p[SHOW_NOTIFICATION_COUNT] ?: true,
             showHiddenContent = p[SHOW_HIDDEN_CONTENT] ?: false,
             modalCloseAction = p[MODAL_CLOSE_ACTION]
                 ?.let { name -> ModalCloseAction.entries.firstOrNull { it.name == name } }
@@ -119,6 +122,10 @@ class SettingsStore(context: Context) {
 
     suspend fun setHiddenApps(packages: Set<String>) {
         store.edit { it[HIDDEN_APPS] = packages }
+    }
+
+    suspend fun setShowNotificationCount(show: Boolean) {
+        store.edit { it[SHOW_NOTIFICATION_COUNT] = show }
     }
 
     suspend fun setShowHiddenContent(show: Boolean) {
@@ -167,6 +174,7 @@ class SettingsStore(context: Context) {
         val SHORTCUT_LAYOUT = stringPreferencesKey("shortcut_layout")
         val HIDDEN_APPS = stringSetPreferencesKey("hidden_apps")
         val SHOW_HIDDEN_CONTENT = booleanPreferencesKey("show_hidden_content")
+        val SHOW_NOTIFICATION_COUNT = booleanPreferencesKey("show_notification_count")
         val MODAL_CLOSE_ACTION = stringPreferencesKey("modal_close_action")
         val MODAL_AUTO_CLOSE = booleanPreferencesKey("modal_auto_close")
         val MODAL_AUTO_CLOSE_SECONDS = intPreferencesKey("modal_auto_close_seconds")

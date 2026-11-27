@@ -253,6 +253,20 @@ fun SettingsScreen(store: SettingsStore, resumeCount: Int) {
                 }
             }
 
+            item { SectionHeader("Notification icons") }
+            item {
+                SettingRow(
+                    "Show number of notifications",
+                    "A small count on an app's icon when it has more than one notification.",
+                    trailing = {
+                        Switch(
+                            checked = settings.showNotificationCount,
+                            onCheckedChange = { scope.launch { store.setShowNotificationCount(it) } },
+                        )
+                    },
+                )
+            }
+
             item { SectionHeader("✕ button in the notification window") }
             items(ModalCloseAction.entries) { action ->
                 Row(

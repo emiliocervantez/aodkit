@@ -99,6 +99,7 @@ class AodActivity : ComponentActivity() {
                         shortcuts = prefs.shortcuts,
                         shortcutLayout = prefs.shortcutLayout,
                         moveContent = prefs.moveContent,
+                        showNotificationCount = prefs.showNotificationCount,
                         closeButtonDismisses = prefs.modalCloseAction == ModalCloseAction.DISMISS_ALL,
                         modalAutoCloseMs = (prefs.modalAutoCloseSeconds * 1_000L).takeIf { prefs.modalAutoClose },
                         // Samsung switches the sensor off while we cover the Lock Screen; step aside
