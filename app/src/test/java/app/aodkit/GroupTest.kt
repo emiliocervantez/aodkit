@@ -124,6 +124,27 @@ class GroupTest {
     }
 
     @Test
+    fun `cleanText removes newsletter preview padding`() {
+        // Preview line, then the zero-width / non-breaking padding newsletters append, then the body.
+        val padding = "͏ ‌​ ".repeat(150)
+        val raw = "Fewer errors and  more\n$padding\n\n\n\nRead the research"
+        assertEquals("Fewer errors and more\n\nRead the research", cleanText(raw))
+    }
+
+    @Test
+    fun `cleanText keeps single paragraph breaks and drops invisible-only text`() {
+        assertEquals("a\n\nb\nc", cleanText(" a \n\n\nb\nc\n"))
+        assertEquals(null, cleanText("​  \n͏"))
+        assertEquals(null, cleanText(null))
+    }
+
+    @Test
+    fun `notification whose text is only padding is dropped`() {
+        val result = group(listOf(raw("pad", title = "​", text = " ͏")), emptySet())
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
     fun `public notification without any content is dropped`() {
         val result = group(listOf(raw("empty", title = null, text = " ")), emptySet())
         assertTrue(result.isEmpty())

@@ -59,6 +59,37 @@ fun group(
         .map { (pkg, list) -> AppNotifications(pkg, list.sortedByDescending { it.postTime }) }
         .sortedByDescending { it.notifications.first().postTime }
 
+/** U+034F COMBINING GRAPHEME JOINER: invisible, used in email preview padding, but not a format char. */
+private const val GRAPHEME_JOINER = '͏'
+
+/**
+ * Removes the invisible padding newsletters put after their preview text (zero-width spaces and joiners,
+ * soft hyphens, non-breaking spaces). Repeated spaces are squeezed, each line is trimmed and runs of
+ * blank lines become a single empty line. Returns null when nothing visible is left.
+ */
+internal fun cleanText(text: String?): String? {
+    if (text == null) return null
+    val visible = buildString {
+        for (c in text) {
+            when {
+                c == '\n' -> append('\n')
+                Character.getType(c) == Character.FORMAT.toInt() || c == GRAPHEME_JOINER -> Unit
+                Character.isSpaceChar(c) || c == '\t' -> append(' ')
+                else -> append(c)
+            }
+        }
+    }
+    return visible.lines()
+        .map { it.replace(Regex(" {2,}"), " ").trim() }
+        .fold(mutableListOf<String>()) { out, line ->
+            if (line.isNotEmpty() || out.lastOrNull()?.isNotEmpty() == true) out.add(line)
+            out
+        }
+        .joinToString("\n")
+        .trim()
+        .ifEmpty { null }
+}
+
 private fun RawNotification.toAodNotificationOrNull(showHiddenContent: Boolean): AodNotification? {
     // Content is hidden only when the app marked it SECRET or the user's lock-screen setting asks for it.
     val override = userVisibilityOverride
@@ -67,16 +98,28 @@ private fun RawNotification.toAodNotificationOrNull(showHiddenContent: Boolean):
         ?: if (visibility == Notification.VISIBILITY_SECRET) Notification.VISIBILITY_SECRET else Notification.VISIBILITY_PUBLIC
     val n = when (effective) {
         Notification.VISIBILITY_SECRET -> return null
-        Notification.VISIBILITY_PRIVATE -> AodNotification(
+        Notification.VISIBILITY_PRIVATE -> {
+            val publicTitle = cleanText(publicTitle)
+            val publicText = cleanText(publicText)
+            AodNotification(
+                key = key,
+                postTime = postTime,
+                title = publicTitle,
+                text = publicText,
+                messages = emptyList(),
+                contentHidden = publicTitle == null && publicText == null,
+                contentIntent = contentIntent,
+            )
+        }
+        else -> AodNotification(
             key = key,
             postTime = postTime,
-            title = publicTitle,
-            text = publicText,
-            messages = emptyList(),
-            contentHidden = publicTitle.isNullOrBlank() && publicText.isNullOrBlank(),
+            title = cleanText(title),
+            text = cleanText(text),
+            messages = messages.mapNotNull { m -> cleanText(m.text)?.let { m.copy(text = it) } },
+            contentHidden = false,
             contentIntent = contentIntent,
         )
-        else -> AodNotification(key, postTime, title, text, messages, false, contentIntent)
     }
     val hasContent = !n.title.isNullOrBlank() || !n.text.isNullOrBlank() || n.messages.isNotEmpty()
     return n.takeIf { it.contentHidden || hasContent }
