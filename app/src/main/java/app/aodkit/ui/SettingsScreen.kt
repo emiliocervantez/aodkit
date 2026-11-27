@@ -287,6 +287,7 @@ fun SettingsScreen(store: SettingsStore, resumeCount: Int) {
                                     when (action) {
                                         PowerButtonAction.DISPLAY_OFF -> "Turn display off"
                                         PowerButtonAction.LOCK_SCREEN -> "Show lock screen"
+                                        PowerButtonAction.KEEP_ON -> "Keep AOD on (display blinks briefly)"
                                     },
                                     Modifier.padding(start = 16.dp),
                                 )

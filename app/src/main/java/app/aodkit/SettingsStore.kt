@@ -16,7 +16,13 @@ import kotlinx.coroutines.flow.map
 const val MAX_SHORTCUTS = 10
 
 /** What a power-button press does while the AOD Screen is showing. */
-enum class PowerButtonAction { DISPLAY_OFF, LOCK_SCREEN }
+enum class PowerButtonAction {
+    DISPLAY_OFF,
+    LOCK_SCREEN,
+
+    /** Apps cannot block the power key, so the display is turned straight back on instead. */
+    KEEP_ON,
+}
 
 /** What the ✕ button in the Notification Modal does. */
 enum class ModalCloseAction {

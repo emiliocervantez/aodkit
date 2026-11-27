@@ -133,6 +133,12 @@ class AodActivity : ComponentActivity() {
         if (hasFocus) contentRevealed = true
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Brought back only to wake the display; closing hands it to the lock screen.
+        if (intent.getBooleanExtra(EXTRA_SHOW_LOCK_SCREEN, false)) finish()
+    }
+
     override fun onStop() {
         super.onStop()
         // Left while the display is still on (home gesture, a call screen on top): don't linger
@@ -209,6 +215,9 @@ class AodActivity : ComponentActivity() {
     }
 
     companion object {
+        /** Intent extra: wake the display and close at once, showing the lock screen. */
+        const val EXTRA_SHOW_LOCK_SCREEN = "app.aodkit.extra.SHOW_LOCK_SCREEN"
+
         @Volatile
         private var currentRef: WeakReference<AodActivity>? = null
 

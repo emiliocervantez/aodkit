@@ -10,7 +10,6 @@ import android.media.AudioManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.os.PowerManager
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -108,21 +107,31 @@ class AodNotificationListener : NotificationListenerService() {
         }
         val s = settings.value
         if (!s.enabled || !Settings.canDrawOverlays(this) || isInCall()) return
-        startActivity(Intent(this, AodActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        showAod()
+    }
+
+    /**
+     * Starts (or brings back) the AOD Screen; its turnScreenOn wakes the display. With
+     * [showLockScreen] it closes again at once, leaving the woken display on the lock screen.
+     */
+    private fun showAod(showLockScreen: Boolean = false) {
+        startActivity(
+            Intent(this, AodActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                .putExtra(AodActivity.EXTRA_SHOW_LOCK_SCREEN, showLockScreen),
+        )
     }
 
     private fun onScreenOffWhileAodShown() {
         val aod = AodActivity.current ?: return
         if (AodActivity.proximityNear) return
-        aod.finish()
-        if (settings.value.powerButton == PowerButtonAction.LOCK_SCREEN) wakeToLockScreen()
-    }
-
-    @Suppress("DEPRECATION") // No non-deprecated way for an app to turn the display on without an activity.
-    private fun wakeToLockScreen() {
-        getSystemService<PowerManager>()
-            ?.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP, "aodkit:wake")
-            ?.acquire(WAKE_HOLD_MS)
+        when (settings.value.powerButton) {
+            PowerButtonAction.DISPLAY_OFF -> aod.finish()
+            // A wake lock can't wake the display: Samsung ignores ACQUIRE_CAUSES_WAKEUP from an app
+            // whose notifications are off. Re-showing the AOD Screen does, via turnScreenOn.
+            PowerButtonAction.LOCK_SCREEN -> showAod(showLockScreen = true)
+            PowerButtonAction.KEEP_ON -> showAod()
+        }
     }
 
     private fun isInCall(): Boolean {
@@ -132,7 +141,6 @@ class AodNotificationListener : NotificationListenerService() {
 
     companion object {
         private const val PROXIMITY_SETTLE_MS = 300L
-        private const val WAKE_HOLD_MS = 1_000L
         private const val MAX_MESSAGES = 5
 
         @Volatile
