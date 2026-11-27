@@ -5,6 +5,8 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.MutablePreferences
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -39,6 +41,83 @@ enum class UnlockMethod {
     SWIPE_PIN,
 }
 
+/** How the clock on the AOD Screen is drawn. */
+enum class ClockStyle { DIGITAL, ANALOG, BOTH }
+
+/** How the digital clock counts time. The analog dial always shows standard time. */
+enum class TimeSystem {
+    STANDARD,
+
+    /** 24-hour without a colon: 1430. */
+    MILITARY,
+
+    /** Swatch Internet Time: 1000 .beats per day on Biel Mean Time (UTC+1), the same everywhere. */
+    SWATCH_BEATS,
+
+    /** French Revolutionary time: 10 hours of 100 minutes of 100 seconds per day. */
+    DECIMAL,
+
+    /** Seconds since 1970-01-01 UTC. */
+    UNIX,
+}
+
+enum class HourFormat { SYSTEM, H12, H24 }
+
+/** AUTO follows convention: 24-hour pads the hour (09:05), 12-hour doesn't (9:05). */
+enum class LeadingZero { AUTO, ALWAYS, NEVER }
+
+enum class ClockWeight { THIN, LIGHT, REGULAR, MEDIUM, BOLD }
+
+enum class ClockFont { SANS, SERIF, MONO, CURSIVE }
+
+/** Muted colours, dim enough for a black always-on screen. */
+enum class ClockColor(val argb: Long) {
+    GREY(0xFF8E8E8E),
+    WHITE(0xFFE0E0E0),
+    RED(0xFFC0645F),
+    ORANGE(0xFFC98552),
+    AMBER(0xFFC9A752),
+    GREEN(0xFF74A86B),
+    TEAL(0xFF5FA39E),
+    BLUE(0xFF6489C0),
+    PURPLE(0xFF9277BD),
+    PINK(0xFFC2729D),
+}
+
+enum class DialTicks { NONE, HOURS, MINUTES }
+
+enum class DialNumerals { NONE, ARABIC, ROMAN }
+
+enum class HandStyle { LINE, BATON, DAUPHINE }
+
+data class ClockSettings(
+    val style: ClockStyle = ClockStyle.DIGITAL,
+    val system: TimeSystem = TimeSystem.STANDARD,
+    val hourFormat: HourFormat = HourFormat.SYSTEM,
+    /** 12-hour only. */
+    val showAmPm: Boolean = false,
+    val leadingZero: LeadingZero = LeadingZero.AUTO,
+    /** Digital seconds and the analog second hand; the clock then redraws every second. */
+    val showSeconds: Boolean = false,
+    /** IANA zone id; empty follows the device's zone. */
+    val zone: String = "",
+    val showZoneLabel: Boolean = false,
+    /** A small extra clock for [secondZone] under the main one. */
+    val secondClock: Boolean = false,
+    val secondZone: String = "UTC",
+    /** Clock size relative to the default, [CLOCK_SCALE_RANGE]. */
+    val scale: Float = 1f,
+    val weight: ClockWeight = ClockWeight.THIN,
+    val font: ClockFont = ClockFont.SANS,
+    val color: ClockColor = ClockColor.GREY,
+    val ticks: DialTicks = DialTicks.HOURS,
+    val numerals: DialNumerals = DialNumerals.NONE,
+    val hands: HandStyle = HandStyle.LINE,
+    val dialRing: Boolean = true,
+)
+
+val CLOCK_SCALE_RANGE = 0.5f..1.5f
+
 data class AodSettings(
     val enabled: Boolean = false,
     /** Shortcut package names, in display order. */
@@ -63,6 +142,7 @@ data class AodSettings(
     val sensorY: Float = DEFAULT_SENSOR_Y,
     /** Draw the ring over the sensor; when hidden, touching the spot still hands over to the fingerprint. */
     val showSensorRing: Boolean = true,
+    val clock: ClockSettings = ClockSettings(),
 )
 
 const val DEFAULT_AUTO_CLOSE_SECONDS = 30
@@ -105,7 +185,13 @@ class SettingsStore(context: Context) {
                 ?: UnlockMethod.FINGERPRINT,
             sensorY = p[SENSOR_Y] ?: DEFAULT_SENSOR_Y,
             showSensorRing = p[SHOW_SENSOR_RING] ?: true,
+            clock = readClock(p),
         )
+    }
+
+    /** Reads and writes inside one edit, so quick successive changes never overwrite each other. */
+    suspend fun updateClock(transform: (ClockSettings) -> ClockSettings) {
+        store.edit { p -> writeClock(p, transform(readClock(p))) }
     }
 
     suspend fun setEnabled(enabled: Boolean) {
@@ -168,6 +254,51 @@ class SettingsStore(context: Context) {
         store.edit { it[SHOW_SENSOR_RING] = show }
     }
 
+    private fun readClock(p: Preferences) = ClockSettings(
+        style = enumOr(p[CLOCK_STYLE], ClockStyle.DIGITAL),
+        system = enumOr(p[CLOCK_SYSTEM], TimeSystem.STANDARD),
+        hourFormat = enumOr(p[CLOCK_HOUR_FORMAT], HourFormat.SYSTEM),
+        showAmPm = p[CLOCK_AM_PM] ?: false,
+        leadingZero = enumOr(p[CLOCK_LEADING_ZERO], LeadingZero.AUTO),
+        showSeconds = p[CLOCK_SECONDS] ?: false,
+        zone = p[CLOCK_ZONE] ?: "",
+        showZoneLabel = p[CLOCK_ZONE_LABEL] ?: false,
+        secondClock = p[CLOCK_SECOND_CLOCK] ?: false,
+        secondZone = p[CLOCK_SECOND_ZONE] ?: "UTC",
+        scale = p[CLOCK_SCALE] ?: 1f,
+        weight = enumOr(p[CLOCK_WEIGHT], ClockWeight.THIN),
+        font = enumOr(p[CLOCK_FONT], ClockFont.SANS),
+        color = enumOr(p[CLOCK_COLOR], ClockColor.GREY),
+        ticks = enumOr(p[CLOCK_TICKS], DialTicks.HOURS),
+        numerals = enumOr(p[CLOCK_NUMERALS], DialNumerals.NONE),
+        hands = enumOr(p[CLOCK_HANDS], HandStyle.LINE),
+        dialRing = p[CLOCK_DIAL_RING] ?: true,
+    )
+
+    private fun writeClock(p: MutablePreferences, c: ClockSettings) {
+        p[CLOCK_STYLE] = c.style.name
+        p[CLOCK_SYSTEM] = c.system.name
+        p[CLOCK_HOUR_FORMAT] = c.hourFormat.name
+        p[CLOCK_AM_PM] = c.showAmPm
+        p[CLOCK_LEADING_ZERO] = c.leadingZero.name
+        p[CLOCK_SECONDS] = c.showSeconds
+        p[CLOCK_ZONE] = c.zone
+        p[CLOCK_ZONE_LABEL] = c.showZoneLabel
+        p[CLOCK_SECOND_CLOCK] = c.secondClock
+        p[CLOCK_SECOND_ZONE] = c.secondZone
+        p[CLOCK_SCALE] = c.scale.coerceIn(CLOCK_SCALE_RANGE)
+        p[CLOCK_WEIGHT] = c.weight.name
+        p[CLOCK_FONT] = c.font.name
+        p[CLOCK_COLOR] = c.color.name
+        p[CLOCK_TICKS] = c.ticks.name
+        p[CLOCK_NUMERALS] = c.numerals.name
+        p[CLOCK_HANDS] = c.hands.name
+        p[CLOCK_DIAL_RING] = c.dialRing
+    }
+
+    private inline fun <reified E : Enum<E>> enumOr(name: String?, default: E): E =
+        enumValues<E>().firstOrNull { it.name == name } ?: default
+
     private companion object {
         val ENABLED = booleanPreferencesKey("enabled")
         val SHORTCUTS = stringPreferencesKey("shortcuts")
@@ -184,5 +315,23 @@ class SettingsStore(context: Context) {
         val UNLOCK_METHOD = stringPreferencesKey("unlock_method")
         val SENSOR_Y = floatPreferencesKey("sensor_y")
         val SHOW_SENSOR_RING = booleanPreferencesKey("show_sensor_ring")
+        val CLOCK_STYLE = stringPreferencesKey("clock_style")
+        val CLOCK_SYSTEM = stringPreferencesKey("clock_system")
+        val CLOCK_HOUR_FORMAT = stringPreferencesKey("clock_hour_format")
+        val CLOCK_AM_PM = booleanPreferencesKey("clock_am_pm")
+        val CLOCK_LEADING_ZERO = stringPreferencesKey("clock_leading_zero")
+        val CLOCK_SECONDS = booleanPreferencesKey("clock_seconds")
+        val CLOCK_ZONE = stringPreferencesKey("clock_zone")
+        val CLOCK_ZONE_LABEL = booleanPreferencesKey("clock_zone_label")
+        val CLOCK_SECOND_CLOCK = booleanPreferencesKey("clock_second_clock")
+        val CLOCK_SECOND_ZONE = stringPreferencesKey("clock_second_zone")
+        val CLOCK_SCALE = floatPreferencesKey("clock_scale")
+        val CLOCK_WEIGHT = stringPreferencesKey("clock_weight")
+        val CLOCK_FONT = stringPreferencesKey("clock_font")
+        val CLOCK_COLOR = stringPreferencesKey("clock_color")
+        val CLOCK_TICKS = stringPreferencesKey("clock_ticks")
+        val CLOCK_NUMERALS = stringPreferencesKey("clock_numerals")
+        val CLOCK_HANDS = stringPreferencesKey("clock_hands")
+        val CLOCK_DIAL_RING = booleanPreferencesKey("clock_dial_ring")
     }
 }

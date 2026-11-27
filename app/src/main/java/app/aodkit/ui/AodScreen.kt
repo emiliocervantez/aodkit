@@ -54,15 +54,21 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import app.aodkit.AodNotification
 import app.aodkit.AppNotifications
+import app.aodkit.ClockSettings
 import app.aodkit.ShortcutLayout
+import app.aodkit.clockZone
 import kotlinx.coroutines.delay
-import java.util.Date
+import java.time.ZoneId
+import java.util.Calendar
+import java.util.TimeZone
+import kotlin.math.roundToInt
 import kotlin.random.Random
 
 internal val AodGrey = Color(0xFF8E8E8E)
@@ -86,6 +92,15 @@ private val EDGE_MARGIN = 24.dp
 /** Keeps the content below the front camera's punch hole. */
 private val TOP_MARGIN = 48.dp
 
+/** The lowest y (px) the content may reach: above the Shortcut Launcher and the fingerprint ring. */
+private fun Density.contentBottom(height: Int, sensorY: Float?, reserveLauncher: Boolean): Int {
+    val margin = EDGE_MARGIN.roundToPx()
+    var bottom = height - margin
+    if (reserveLauncher) bottom = minOf(bottom, height - (LAUNCHER_PADDING + LAUNCHER_SIZE).roundToPx() - margin)
+    if (sensorY != null) bottom = minOf(bottom, (sensorY * height).toInt() - (SENSOR_ZONE / 2).roundToPx() - margin)
+    return bottom
+}
+
 /**
  * Places the content at [spot] (fractions 0..1 of the free room) within the screen. It stays above the
  * fingerprint ring and the Shortcut Launcher, so it never covers either touch area.
@@ -97,11 +112,26 @@ private fun Modifier.placeAt(spot: Pair<Float, Float>, sensorY: Float?, reserveL
         val height = constraints.maxHeight
         val margin = EDGE_MARGIN.roundToPx()
         val top = TOP_MARGIN.roundToPx()
-        var bottom = height - margin
-        if (reserveLauncher) bottom = minOf(bottom, height - (LAUNCHER_PADDING + LAUNCHER_SIZE).roundToPx() - margin)
-        if (sensorY != null) bottom = minOf(bottom, (sensorY * height).toInt() - (SENSOR_ZONE / 2).roundToPx() - margin)
+        val bottom = contentBottom(height, sensorY, reserveLauncher)
         val x = margin + (spot.first * (width - 2 * margin - placeable.width).coerceAtLeast(0)).toInt()
         val y = top + (spot.second * (bottom - top - placeable.height).coerceAtLeast(0)).toInt()
+        layout(width, height) { placeable.place(x, y) }
+    }
+
+/**
+ * Centres the content, moved by [shift], but lifts it when it would reach the fingerprint ring or the
+ * Shortcut Launcher, which a large clock otherwise can. Normal-sized content stays exactly centred.
+ */
+private fun Modifier.centreAbove(shift: Density.() -> IntOffset, sensorY: Float?, reserveLauncher: Boolean) =
+    layout { measurable, constraints ->
+        val placeable = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
+        val width = constraints.maxWidth
+        val height = constraints.maxHeight
+        val (dx, dy) = shift()
+        val x = ((width - placeable.width) / 2f).roundToInt() + dx
+        val y = (((height - placeable.height) / 2f).roundToInt() + dy)
+            .coerceAtMost(contentBottom(height, sensorY, reserveLauncher) - placeable.height)
+            .coerceAtLeast(TOP_MARGIN.roundToPx())
         layout(width, height) { placeable.place(x, y) }
     }
 
@@ -112,6 +142,7 @@ fun AodScreen(
     apps: List<AppNotifications>,
     shortcuts: List<String>,
     shortcutLayout: ShortcutLayout,
+    clock: ClockSettings,
     /** Jump the content block to a random spot every minute; off keeps it centred with a small shift. */
     moveContent: Boolean,
     /** Count badge on Notification Icons of apps with more than one notification. */
@@ -160,18 +191,20 @@ fun AodScreen(
             if (moveContent) {
                 Modifier.placeAt(randomSpot, sensorY, reserveLauncher = shortcuts.isNotEmpty())
             } else {
-                Modifier
-                    .align(Alignment.Center)
-                    .offset {
+                Modifier.centreAbove(
+                    shift = {
                         val (x, y) = burnInSteps[(minute % burnInSteps.size).toInt()]
                         IntOffset(x.dp.roundToPx(), y.dp.roundToPx())
-                    }
+                    },
+                    sensorY = sensorY,
+                    reserveLauncher = shortcuts.isNotEmpty(),
+                )
             },
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Clock(now)
+            AodClock(clock)
             Spacer(Modifier.height(12.dp))
-            DateLine(now)
+            DateLine(now, remember(clock.zone) { clockZone(clock.zone) })
             Spacer(Modifier.height(16.dp))
             BatteryLine()
             Spacer(Modifier.height(40.dp))
@@ -228,24 +261,14 @@ private fun rememberMinuteTicker(): Long {
     return now
 }
 
+/** The date in the clock's [zone], so a clock set to Tokyo shows Tokyo's date. */
 @Composable
-private fun Clock(now: Long) {
-    val context = LocalContext.current
-    val pattern = if (DateFormat.is24HourFormat(context)) "HH:mm" else "h:mm"
-    Text(
-        text = DateFormat.format(pattern, Date(now)).toString(),
-        color = AodGrey,
-        fontSize = 96.sp,
-        fontWeight = FontWeight.Thin,
-    )
-}
-
-@Composable
-private fun DateLine(now: Long) {
+private fun DateLine(now: Long, zone: ZoneId) {
     val locale = LocalConfiguration.current.locales[0]
     val pattern = remember(locale) { DateFormat.getBestDateTimePattern(locale, "EEEMMMd") }
+    val calendar = Calendar.getInstance(TimeZone.getTimeZone(zone)).apply { timeInMillis = now }
     Text(
-        text = DateFormat.format(pattern, Date(now)).toString().uppercase(locale),
+        text = DateFormat.format(pattern, calendar).toString().uppercase(locale),
         color = AodGrey,
         fontSize = 22.sp,
         fontWeight = FontWeight.Light,

@@ -98,6 +98,7 @@ class AodActivity : ComponentActivity() {
                         apps = apps,
                         shortcuts = prefs.shortcuts,
                         shortcutLayout = prefs.shortcutLayout,
+                        clock = prefs.clock,
                         moveContent = prefs.moveContent,
                         showNotificationCount = prefs.showNotificationCount,
                         closeButtonDismisses = prefs.modalCloseAction == ModalCloseAction.DISMISS_ALL,

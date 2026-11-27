@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import android.text.format.DateFormat
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -80,10 +81,11 @@ private data class Permissions(val notificationAccess: Boolean, val overlay: Boo
 
 private data class LaunchableApp(val packageName: String, val label: String)
 
-private enum class Picker { SHORTCUTS, HIDDEN_APPS }
+private enum class Picker { SHORTCUTS, HIDDEN_APPS, CLOCK_ZONE, SECOND_CLOCK_ZONE }
 
 private enum class SettingsGroup(val title: String) {
     PERMISSIONS("Permissions"),
+    CLOCK("Clock"),
     DISPLAY("Display"),
     UNLOCK("Unlock & power button"),
     NOTIFICATIONS("Notifications"),
@@ -101,6 +103,7 @@ fun SettingsScreen(store: SettingsStore, resumeCount: Int) {
     }
     var picker by remember { mutableStateOf<Picker?>(null) }
     var group by rememberSaveable { mutableStateOf<SettingsGroup?>(null) }
+    val system24h = DateFormat.is24HourFormat(context)
     BackHandler(enabled = group != null) { group = null }
 
     Scaffold { padding ->
@@ -136,6 +139,7 @@ fun SettingsScreen(store: SettingsStore, resumeCount: Int) {
                                 g.title,
                                 when (g) {
                                     SettingsGroup.PERMISSIONS -> if (permissions.required) "All required permissions granted" else "Required permissions missing"
+                                    SettingsGroup.CLOCK -> clockSummary(settings.clock, system24h)
                                     SettingsGroup.DISPLAY -> "Brightness, burn-in protection"
                                     SettingsGroup.UNLOCK -> "Unlock method, sensor, power button"
                                     SettingsGroup.NOTIFICATIONS -> "Icons, notification window, hidden apps"
@@ -173,6 +177,17 @@ fun SettingsScreen(store: SettingsStore, resumeCount: Int) {
                                 context.startFirst(listOf(Intent(Settings.ACTION_SETTINGS)))
                             }
                         }
+                    }
+
+                    SettingsGroup.CLOCK -> {
+                        item { GroupHeader(SettingsGroup.CLOCK) { group = null } }
+                        clockSettingsItems(
+                            clock = settings.clock,
+                            system24h = system24h,
+                            update = { transform -> scope.launch { store.updateClock(transform) } },
+                            onPickZone = { second -> picker = if (second) Picker.SECOND_CLOCK_ZONE else Picker.CLOCK_ZONE },
+                        )
+                        item { PreviewButton() }
                     }
 
                     SettingsGroup.DISPLAY -> {
@@ -438,6 +453,20 @@ fun SettingsScreen(store: SettingsStore, resumeCount: Int) {
             onDone = { scope.launch { store.setHiddenApps(it.toSet()) } },
             onClose = { picker = null },
         )
+        Picker.CLOCK_ZONE -> ZonePickerDialog(
+            title = "Time zone",
+            selected = settings?.clock?.zone.orEmpty(),
+            includeDevice = true,
+            onPick = { id -> scope.launch { store.updateClock { it.copy(zone = id) } } },
+            onClose = { picker = null },
+        )
+        Picker.SECOND_CLOCK_ZONE -> ZonePickerDialog(
+            title = "Second clock time zone",
+            selected = settings?.clock?.secondZone.orEmpty(),
+            includeDevice = false,
+            onPick = { id -> scope.launch { store.updateClock { it.copy(secondZone = id) } } },
+            onClose = { picker = null },
+        )
         null -> Unit
     }
 }
@@ -460,7 +489,7 @@ private fun PreviewButton() {
 }
 
 @Composable
-private fun SectionHeader(text: String) {
+internal fun SectionHeader(text: String) {
     Text(
         text,
         Modifier.padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 8.dp),
@@ -470,7 +499,7 @@ private fun SectionHeader(text: String) {
 }
 
 @Composable
-private fun SettingRow(
+internal fun SettingRow(
     title: String,
     subtitle: String,
     trailing: (@Composable () -> Unit)? = null,
@@ -514,7 +543,7 @@ private val SENSOR_Y_RANGE = 0.5f..1f
 
 /** Saves only when the drag ends, so the store isn't written on every frame. */
 @Composable
-private fun PercentSlider(saved: Float, range: ClosedFloatingPointRange<Float>, onSave: (Float) -> Unit) {
+internal fun PercentSlider(saved: Float, range: ClosedFloatingPointRange<Float>, steps: Int = 0, onSave: (Float) -> Unit) {
     var value by remember(saved) { mutableFloatStateOf(saved) }
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -525,6 +554,7 @@ private fun PercentSlider(saved: Float, range: ClosedFloatingPointRange<Float>, 
             onValueChange = { value = it },
             onValueChangeFinished = { onSave(value) },
             valueRange = range,
+            steps = steps,
             modifier = Modifier.weight(1f),
         )
         Text("${(value * 100).roundToInt()}%", Modifier.padding(start = 16.dp).width(48.dp))
