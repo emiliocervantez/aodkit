@@ -45,6 +45,8 @@ data class AodSettings(
     val shortcuts: List<String> = emptyList(),
     val shortcutLayout: ShortcutLayout = ShortcutLayout.VERTICAL,
     val hiddenApps: Set<String> = emptySet(),
+    /** Ignore "hide content" lock-screen settings on the AOD Screen (SECRET stays hidden). */
+    val showHiddenContent: Boolean = false,
     val modalCloseAction: ModalCloseAction = ModalCloseAction.CLOSE,
     /** Close the Notification Modal after [modalAutoCloseSeconds] without a touch; off keeps it open. */
     val modalAutoClose: Boolean = true,
@@ -52,6 +54,8 @@ data class AodSettings(
     val powerButton: PowerButtonAction = PowerButtonAction.DISPLAY_OFF,
     /** Window brightness of the AOD Screen, 0..1. */
     val brightness: Float = DEFAULT_BRIGHTNESS,
+    /** Burn-in protection: jump the content block to a random spot every minute instead of a small shift. */
+    val moveContent: Boolean = false,
     val unlockMethod: UnlockMethod = UnlockMethod.FINGERPRINT,
     /** Vertical centre of the in-display fingerprint sensor, as a fraction of the screen height. */
     val sensorY: Float = DEFAULT_SENSOR_Y,
@@ -82,6 +86,7 @@ class SettingsStore(context: Context) {
                 ?.let { name -> ShortcutLayout.entries.firstOrNull { it.name == name } }
                 ?: ShortcutLayout.VERTICAL,
             hiddenApps = p[HIDDEN_APPS].orEmpty(),
+            showHiddenContent = p[SHOW_HIDDEN_CONTENT] ?: false,
             modalCloseAction = p[MODAL_CLOSE_ACTION]
                 ?.let { name -> ModalCloseAction.entries.firstOrNull { it.name == name } }
                 ?: ModalCloseAction.CLOSE,
@@ -91,6 +96,7 @@ class SettingsStore(context: Context) {
                 ?.let { name -> PowerButtonAction.entries.firstOrNull { it.name == name } }
                 ?: PowerButtonAction.DISPLAY_OFF,
             brightness = p[BRIGHTNESS] ?: DEFAULT_BRIGHTNESS,
+            moveContent = p[MOVE_CONTENT] ?: false,
             unlockMethod = p[UNLOCK_METHOD]
                 ?.let { name -> UnlockMethod.entries.firstOrNull { it.name == name } }
                 ?: UnlockMethod.FINGERPRINT,
@@ -115,6 +121,10 @@ class SettingsStore(context: Context) {
         store.edit { it[HIDDEN_APPS] = packages }
     }
 
+    suspend fun setShowHiddenContent(show: Boolean) {
+        store.edit { it[SHOW_HIDDEN_CONTENT] = show }
+    }
+
     suspend fun setModalCloseAction(action: ModalCloseAction) {
         store.edit { it[MODAL_CLOSE_ACTION] = action.name }
     }
@@ -135,6 +145,10 @@ class SettingsStore(context: Context) {
         store.edit { it[BRIGHTNESS] = brightness.coerceIn(MIN_BRIGHTNESS, 1f) }
     }
 
+    suspend fun setMoveContent(enabled: Boolean) {
+        store.edit { it[MOVE_CONTENT] = enabled }
+    }
+
     suspend fun setUnlockMethod(method: UnlockMethod) {
         store.edit { it[UNLOCK_METHOD] = method.name }
     }
@@ -152,11 +166,13 @@ class SettingsStore(context: Context) {
         val SHORTCUTS = stringPreferencesKey("shortcuts")
         val SHORTCUT_LAYOUT = stringPreferencesKey("shortcut_layout")
         val HIDDEN_APPS = stringSetPreferencesKey("hidden_apps")
+        val SHOW_HIDDEN_CONTENT = booleanPreferencesKey("show_hidden_content")
         val MODAL_CLOSE_ACTION = stringPreferencesKey("modal_close_action")
         val MODAL_AUTO_CLOSE = booleanPreferencesKey("modal_auto_close")
         val MODAL_AUTO_CLOSE_SECONDS = intPreferencesKey("modal_auto_close_seconds")
         val POWER_BUTTON = stringPreferencesKey("power_button")
         val BRIGHTNESS = floatPreferencesKey("brightness")
+        val MOVE_CONTENT = booleanPreferencesKey("move_content")
         val UNLOCK_METHOD = stringPreferencesKey("unlock_method")
         val SENSOR_Y = floatPreferencesKey("sensor_y")
         val SHOW_SENSOR_RING = booleanPreferencesKey("show_sensor_ring")

@@ -18,7 +18,7 @@ data class RawNotification(
     val groupSummary: Boolean,
     /** The app's own lock-screen visibility. PRIVATE is Android's default, so it doesn't hide content here. */
     val visibility: Int,
-    /** Lock-screen visibility the user chose for the channel, or null when they left it alone. */
+    /** Lock-screen visibility the user chose for the app or channel, or null when they left it alone. */
     val userVisibilityOverride: Int?,
     val title: String?,
     val text: String?,
@@ -44,19 +44,26 @@ data class AppNotifications(val packageName: String, val notifications: List<Aod
 
 /**
  * Filters [raw] notifications down to what may be shown on the AOD Screen and groups them per app.
- * Apps are ordered by their newest notification.
+ * Apps are ordered by their newest notification. With [showHiddenContent], a "hide content" lock-screen
+ * setting (override PRIVATE) is ignored; SECRET still drops the notification.
  */
-fun group(raw: List<RawNotification>, hiddenApps: Set<String>): List<AppNotifications> =
+fun group(
+    raw: List<RawNotification>,
+    hiddenApps: Set<String>,
+    showHiddenContent: Boolean = false,
+): List<AppNotifications> =
     raw.asSequence()
         .filterNot { it.ongoing || it.groupSummary || it.packageName in hiddenApps }
-        .mapNotNull { r -> r.toAodNotificationOrNull()?.let { r.packageName to it } }
+        .mapNotNull { r -> r.toAodNotificationOrNull(showHiddenContent)?.let { r.packageName to it } }
         .groupBy({ it.first }, { it.second })
         .map { (pkg, list) -> AppNotifications(pkg, list.sortedByDescending { it.postTime }) }
         .sortedByDescending { it.notifications.first().postTime }
 
-private fun RawNotification.toAodNotificationOrNull(): AodNotification? {
-    // Content is hidden only when the app marked it SECRET or the user asked for it on that channel.
-    val effective = userVisibilityOverride
+private fun RawNotification.toAodNotificationOrNull(showHiddenContent: Boolean): AodNotification? {
+    // Content is hidden only when the app marked it SECRET or the user's lock-screen setting asks for it.
+    val override = userVisibilityOverride
+        ?.takeUnless { showHiddenContent && it == Notification.VISIBILITY_PRIVATE }
+    val effective = override
         ?: if (visibility == Notification.VISIBILITY_SECRET) Notification.VISIBILITY_SECRET else Notification.VISIBILITY_PUBLIC
     val n = when (effective) {
         Notification.VISIBILITY_SECRET -> return null

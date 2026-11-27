@@ -151,6 +151,24 @@ fun SettingsScreen(store: SettingsStore, resumeCount: Int) {
                 PercentSlider(settings.brightness, MIN_BRIGHTNESS..1f) { scope.launch { store.setBrightness(it) } }
             }
 
+            item { SectionHeader("Burn-in protection") }
+            item {
+                SettingRow(
+                    "Move content around the screen",
+                    if (settings.moveContent) {
+                        "Every minute the clock, date, battery and icons jump to a random spot. The shortcut button and fingerprint circle stay put."
+                    } else {
+                        "Content stays centred and shifts by a few pixels each minute."
+                    },
+                    trailing = {
+                        Switch(
+                            checked = settings.moveContent,
+                            onCheckedChange = { scope.launch { store.setMoveContent(it) } },
+                        )
+                    },
+                )
+            }
+
             item { SectionHeader("Unlock with") }
             items(UnlockMethod.entries) { method ->
                 Row(
@@ -282,6 +300,19 @@ fun SettingsScreen(store: SettingsStore, resumeCount: Int) {
                 SettingRow("Hidden apps", "${settings.hiddenApps.size} apps never get a notification icon.") {
                     picker = Picker.HIDDEN_APPS
                 }
+            }
+            item {
+                SettingRow(
+                    "Show hidden content on the AOD Screen",
+                    "Shows message text that your phone's lock-screen settings hide (e.g. Telegram). " +
+                        "The Samsung lock screen stays private; secret notifications stay hidden.",
+                    trailing = {
+                        Switch(
+                            checked = settings.showHiddenContent,
+                            onCheckedChange = { scope.launch { store.setShowHiddenContent(it) } },
+                        )
+                    },
+                )
             }
 
             item {

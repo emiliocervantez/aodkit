@@ -107,6 +107,23 @@ class GroupTest {
     }
 
     @Test
+    fun `showHiddenContent ignores a hide-content override but not secret`() {
+        val result = group(
+            listOf(
+                raw("p", userOverride = Notification.VISIBILITY_PRIVATE),
+                raw("s", userOverride = Notification.VISIBILITY_SECRET),
+                raw("a", visibility = Notification.VISIBILITY_SECRET),
+            ),
+            hiddenApps = emptySet(),
+            showHiddenContent = true,
+        )
+        val n = result.single().notifications.single()
+        assertEquals("p", n.key)
+        assertEquals(false, n.contentHidden)
+        assertEquals("Text p", n.text)
+    }
+
+    @Test
     fun `public notification without any content is dropped`() {
         val result = group(listOf(raw("empty", title = null, text = " ")), emptySet())
         assertTrue(result.isEmpty())

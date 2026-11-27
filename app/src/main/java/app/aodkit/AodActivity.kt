@@ -16,6 +16,7 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -83,6 +84,9 @@ class AodActivity : ComponentActivity() {
             this, unlockReceiver, IntentFilter(Intent.ACTION_USER_PRESENT), ContextCompat.RECEIVER_NOT_EXPORTED,
         )
         startProximity()
+        // Back must not drop to the Lock Screen. Registered first, so the Notification Modal's and the
+        // Shortcut fan's own Back handlers (added later) still take precedence while they are open.
+        onBackPressedDispatcher.addCallback(this) {}
 
         setContent {
             val apps by NotificationRepository.apps.collectAsState()
@@ -94,6 +98,7 @@ class AodActivity : ComponentActivity() {
                         apps = apps,
                         shortcuts = prefs.shortcuts,
                         shortcutLayout = prefs.shortcutLayout,
+                        moveContent = prefs.moveContent,
                         closeButtonDismisses = prefs.modalCloseAction == ModalCloseAction.DISMISS_ALL,
                         modalAutoCloseMs = (prefs.modalAutoCloseSeconds * 1_000L).takeIf { prefs.modalAutoClose },
                         // Samsung switches the sensor off while we cover the Lock Screen; step aside
@@ -107,7 +112,6 @@ class AodActivity : ComponentActivity() {
                             // Brings up Samsung's PIN/pattern screen; on cancel the AOD Screen stays.
                             UnlockMethod.SWIPE_PIN -> ({ unlockThen {} })
                         },
-                        onExit = ::finish,
                         onDismiss = AodNotificationListener::dismiss,
                         onOpen = { n -> n.contentIntent?.let { unlockThen { sendContentIntent(it) } } },
                         onLaunchShortcut = { pkg -> unlockThen { launchApp(pkg) } },

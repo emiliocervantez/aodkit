@@ -40,7 +40,7 @@ class AodNotificationListener : NotificationListenerService() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var settings: StateFlow<AodSettings>
     private var connected = false
-    private var hiddenAppsJob: Job? = null
+    private var filterSettingsJob: Job? = null
 
     private val screenOffReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -65,8 +65,8 @@ class AodNotificationListener : NotificationListenerService() {
         ContextCompat.registerReceiver(
             this, screenOffReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF), ContextCompat.RECEIVER_NOT_EXPORTED,
         )
-        hiddenAppsJob = scope.launch {
-            settings.map { it.hiddenApps }.distinctUntilChanged().collect { refresh() }
+        filterSettingsJob = scope.launch {
+            settings.map { it.hiddenApps to it.showHiddenContent }.distinctUntilChanged().collect { refresh() }
         }
         refresh()
     }
@@ -74,7 +74,7 @@ class AodNotificationListener : NotificationListenerService() {
     override fun onListenerDisconnected() {
         connected = false
         instance = null
-        hiddenAppsJob?.cancel()
+        filterSettingsJob?.cancel()
         unregisterReceiver(screenOffReceiver)
         NotificationRepository.update(emptyList())
         // Samsung occasionally unbinds listeners; ask to be bound again.
@@ -95,7 +95,8 @@ class AodNotificationListener : NotificationListenerService() {
             null
         } ?: return
         val ranking = currentRanking
-        NotificationRepository.update(group(active.map { it.toRaw(ranking) }, settings.value.hiddenApps))
+        val s = settings.value
+        NotificationRepository.update(group(active.map { it.toRaw(ranking) }, s.hiddenApps, s.showHiddenContent))
     }
 
     private fun onScreenOff() {

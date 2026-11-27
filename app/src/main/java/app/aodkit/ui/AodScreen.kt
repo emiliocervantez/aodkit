@@ -14,7 +14,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -50,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -62,6 +62,7 @@ import app.aodkit.AppNotifications
 import app.aodkit.ShortcutLayout
 import kotlinx.coroutines.delay
 import java.util.Date
+import kotlin.random.Random
 
 internal val AodGrey = Color(0xFF8E8E8E)
 private const val MAX_ICONS = 6
@@ -78,6 +79,30 @@ private val SENSOR_ZONE = 80.dp
 /** Burn-in protection: the content block steps through these offsets (dp), one per minute. */
 private val burnInSteps = listOf(0 to 0, 4 to 2, 2 to -4, -4 to -2, -2 to 4, 4 to -4, -4 to 4, 0 to -6)
 
+private val EDGE_MARGIN = 24.dp
+
+/** Keeps the content below the front camera's punch hole. */
+private val TOP_MARGIN = 48.dp
+
+/**
+ * Places the content at [spot] (fractions 0..1 of the free room) within the screen. It stays above the
+ * fingerprint ring and the Shortcut Launcher, so it never covers either touch area.
+ */
+private fun Modifier.placeAt(spot: Pair<Float, Float>, sensorY: Float?, reserveLauncher: Boolean) =
+    layout { measurable, constraints ->
+        val placeable = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
+        val width = constraints.maxWidth
+        val height = constraints.maxHeight
+        val margin = EDGE_MARGIN.roundToPx()
+        val top = TOP_MARGIN.roundToPx()
+        var bottom = height - margin
+        if (reserveLauncher) bottom = minOf(bottom, height - (LAUNCHER_PADDING + LAUNCHER_SIZE).roundToPx() - margin)
+        if (sensorY != null) bottom = minOf(bottom, (sensorY * height).toInt() - (SENSOR_ZONE / 2).roundToPx() - margin)
+        val x = margin + (spot.first * (width - 2 * margin - placeable.width).coerceAtLeast(0)).toInt()
+        val y = top + (spot.second * (bottom - top - placeable.height).coerceAtLeast(0)).toInt()
+        layout(width, height) { placeable.place(x, y) }
+    }
+
 /** [revealed] stays false (pure black) until the AOD brightness is in effect, then content fades in. */
 @Composable
 fun AodScreen(
@@ -85,6 +110,8 @@ fun AodScreen(
     apps: List<AppNotifications>,
     shortcuts: List<String>,
     shortcutLayout: ShortcutLayout,
+    /** Jump the content block to a random spot every minute; off keeps it centred with a small shift. */
+    moveContent: Boolean,
     closeButtonDismisses: Boolean,
     /** Null when the Notification Modal should stay open until closed. */
     modalAutoCloseMs: Long?,
@@ -94,7 +121,6 @@ fun AodScreen(
     onSensorTouch: () -> Unit,
     /** Null when swipe-to-unlock is off. */
     onSwipeUp: (() -> Unit)?,
-    onExit: () -> Unit,
     onDismiss: (String) -> Unit,
     onOpen: (AodNotification) -> Unit,
     onLaunchShortcut: (String) -> Unit,
@@ -114,7 +140,6 @@ fun AodScreen(
             .fillMaxSize()
             .background(Color.Black)
             .graphicsLayer { alpha = contentAlpha }
-            .pointerInput(Unit) { detectTapGestures(onDoubleTap = { onExit() }) }
             .pointerInput(swipeEnabled) {
                 if (!swipeEnabled) return@pointerInput
                 var dragged = 0f
@@ -125,13 +150,19 @@ fun AodScreen(
                 )
             },
     ) {
+        val minute = now / MINUTE_MS
+        val randomSpot = remember(minute) { Random.nextFloat() to Random.nextFloat() }
         Column(
-            Modifier
-                .align(Alignment.Center)
-                .offset {
-                    val (x, y) = burnInSteps[((now / MINUTE_MS) % burnInSteps.size).toInt()]
-                    IntOffset(x.dp.roundToPx(), y.dp.roundToPx())
-                },
+            if (moveContent) {
+                Modifier.placeAt(randomSpot, sensorY, reserveLauncher = shortcuts.isNotEmpty())
+            } else {
+                Modifier
+                    .align(Alignment.Center)
+                    .offset {
+                        val (x, y) = burnInSteps[(minute % burnInSteps.size).toInt()]
+                        IntOffset(x.dp.roundToPx(), y.dp.roundToPx())
+                    }
+            },
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Clock(now)
