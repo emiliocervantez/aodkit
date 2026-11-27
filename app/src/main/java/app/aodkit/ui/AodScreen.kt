@@ -21,15 +21,20 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -54,6 +59,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
@@ -63,14 +69,15 @@ import androidx.core.content.ContextCompat
 import app.aodkit.AodNotification
 import app.aodkit.AppNotifications
 import app.aodkit.ClockSettings
+import app.aodkit.R
 import app.aodkit.ShortcutLayout
 import app.aodkit.clockZone
-import kotlinx.coroutines.delay
 import java.time.ZoneId
 import java.util.Calendar
 import java.util.TimeZone
 import kotlin.math.roundToInt
 import kotlin.random.Random
+import kotlinx.coroutines.delay
 
 internal val AodGrey = Color(0xFF8E8E8E)
 private const val MAX_ICONS = 6
@@ -161,6 +168,8 @@ fun AodScreen(
     onDismiss: (String) -> Unit,
     onOpen: (AodNotification) -> Unit,
     onLaunchShortcut: (String) -> Unit,
+    /** Shows a "← Settings" link at the top left when not null (Preview from Settings). */
+    onBackToSettings: (() -> Unit)? = null,
 ) {
     var selectedPackage by remember { mutableStateOf<String?>(null) }
     var shortcutsOpen by remember { mutableStateOf(false) }
@@ -216,6 +225,21 @@ fun AodScreen(
         }
 
         // Declared before the modal and the fan so their scrims sit on top and take touches first.
+        if (onBackToSettings != null) {
+            Row(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
+                    .padding(4.dp)
+                    .clickable(onClick = onBackToSettings)
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // A vector, not "←": the glyph sits below the text's centre line.
+                Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = null)
+                Text("Settings", Modifier.padding(start = 12.dp), style = MaterialTheme.typography.titleMedium)
+            }
+        }
         if (sensorY != null) SensorZone(sensorY, showSensorRing, onSensorTouch)
 
         if (shortcuts.isNotEmpty()) {

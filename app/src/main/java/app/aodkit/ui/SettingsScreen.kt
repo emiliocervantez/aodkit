@@ -498,7 +498,9 @@ private fun GroupHeader(group: SettingsGroup, onBack: () -> Unit) {
 private fun PreviewButton() {
     val context = LocalContext.current
     Button(
-        onClick = { context.startActivity(Intent(context, AodActivity::class.java)) },
+        onClick = {
+            context.startActivity(Intent(context, AodActivity::class.java).putExtra(AodActivity.EXTRA_PREVIEW, true))
+        },
         Modifier.padding(16.dp).fillMaxWidth(),
     ) { Text("Preview AOD Screen") }
 }

@@ -45,6 +45,9 @@ class AodActivity : ComponentActivity() {
 
     private var proximityLock: PowerManager.WakeLock? = null
     private var contentRevealed by mutableStateOf(false)
+
+    /** Opened from Settings' Preview button: shows a way back to Settings. */
+    private var preview by mutableStateOf(false)
     private val sensorManager by lazy { getSystemService<SensorManager>() }
 
     private val proximityListener = object : SensorEventListener {
@@ -62,6 +65,7 @@ class AodActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         currentRef = WeakReference(this)
+        preview = intent.getBooleanExtra(EXTRA_PREVIEW, false)
 
         setShowWhenLocked(true)
         setTurnScreenOn(true)
@@ -84,9 +88,10 @@ class AodActivity : ComponentActivity() {
             this, unlockReceiver, IntentFilter(Intent.ACTION_USER_PRESENT), ContextCompat.RECEIVER_NOT_EXPORTED,
         )
         startProximity()
-        // Back must not drop to the Lock Screen. Registered first, so the Notification Modal's and the
-        // Shortcut fan's own Back handlers (added later) still take precedence while they are open.
-        onBackPressedDispatcher.addCallback(this) {}
+        // Back must not drop to the Lock Screen; in a preview it returns to Settings. Registered first,
+        // so the Notification Modal's and the Shortcut fan's own Back handlers (added later) still
+        // take precedence while they are open.
+        onBackPressedDispatcher.addCallback(this) { if (preview) finish() }
 
         setContent {
             val apps by NotificationRepository.apps.collectAsState()
@@ -118,6 +123,7 @@ class AodActivity : ComponentActivity() {
                         onDismiss = AodNotificationListener::dismiss,
                         onOpen = { n -> n.contentIntent?.let { unlockThen { sendContentIntent(it) } } },
                         onLaunchShortcut = { pkg -> unlockThen { launchApp(pkg) } },
+                        onBackToSettings = if (preview) ::finish else null,
                     )
                 }
             }
@@ -136,6 +142,8 @@ class AodActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // Brought back by the listener after a power press: from now on it is the real AOD Screen.
+        preview = intent.getBooleanExtra(EXTRA_PREVIEW, false)
         // Brought back only to wake the display; closing hands it to the lock screen.
         if (intent.getBooleanExtra(EXTRA_SHOW_LOCK_SCREEN, false)) finish()
     }
@@ -218,6 +226,9 @@ class AodActivity : ComponentActivity() {
     companion object {
         /** Intent extra: wake the display and close at once, showing the lock screen. */
         const val EXTRA_SHOW_LOCK_SCREEN = "app.aodkit.extra.SHOW_LOCK_SCREEN"
+
+        /** Intent extra: opened as a preview from Settings. */
+        const val EXTRA_PREVIEW = "app.aodkit.extra.PREVIEW"
 
         @Volatile
         private var currentRef: WeakReference<AodActivity>? = null
