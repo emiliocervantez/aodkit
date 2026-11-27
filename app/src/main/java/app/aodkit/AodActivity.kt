@@ -100,6 +100,7 @@ class AodActivity : ComponentActivity() {
                         shortcutLayout = prefs.shortcutLayout,
                         clock = prefs.clock,
                         moveContent = prefs.moveContent,
+                        showBattery = prefs.showBattery,
                         showNotificationCount = prefs.showNotificationCount,
                         closeButtonDismisses = prefs.modalCloseAction == ModalCloseAction.DISMISS_ALL,
                         modalAutoCloseMs = (prefs.modalAutoCloseSeconds * 1_000L).takeIf { prefs.modalAutoClose },

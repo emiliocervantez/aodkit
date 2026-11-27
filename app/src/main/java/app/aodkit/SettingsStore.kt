@@ -143,6 +143,8 @@ data class AodSettings(
     val brightness: Float = DEFAULT_BRIGHTNESS,
     /** Burn-in protection: jump the content block to a random spot every minute instead of a small shift. */
     val moveContent: Boolean = false,
+    /** Battery percentage under the date on the AOD Screen. */
+    val showBattery: Boolean = true,
     val unlockMethod: UnlockMethod = UnlockMethod.FINGERPRINT,
     /** Vertical centre of the in-display fingerprint sensor, as a fraction of the screen height. */
     val sensorY: Float = DEFAULT_SENSOR_Y,
@@ -186,6 +188,7 @@ class SettingsStore(context: Context) {
                 ?: PowerButtonAction.DISPLAY_OFF,
             brightness = p[BRIGHTNESS] ?: DEFAULT_BRIGHTNESS,
             moveContent = p[MOVE_CONTENT] ?: false,
+            showBattery = p[SHOW_BATTERY] ?: true,
             unlockMethod = p[UNLOCK_METHOD]
                 ?.let { name -> UnlockMethod.entries.firstOrNull { it.name == name } }
                 ?: UnlockMethod.FINGERPRINT,
@@ -246,6 +249,10 @@ class SettingsStore(context: Context) {
 
     suspend fun setMoveContent(enabled: Boolean) {
         store.edit { it[MOVE_CONTENT] = enabled }
+    }
+
+    suspend fun setShowBattery(show: Boolean) {
+        store.edit { it[SHOW_BATTERY] = show }
     }
 
     suspend fun setUnlockMethod(method: UnlockMethod) {
@@ -318,6 +325,7 @@ class SettingsStore(context: Context) {
         val POWER_BUTTON = stringPreferencesKey("power_button")
         val BRIGHTNESS = floatPreferencesKey("brightness")
         val MOVE_CONTENT = booleanPreferencesKey("move_content")
+        val SHOW_BATTERY = booleanPreferencesKey("show_battery")
         val UNLOCK_METHOD = stringPreferencesKey("unlock_method")
         val SENSOR_Y = floatPreferencesKey("sensor_y")
         val SHOW_SENSOR_RING = booleanPreferencesKey("show_sensor_ring")

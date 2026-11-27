@@ -48,6 +48,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
@@ -145,6 +146,7 @@ fun AodScreen(
     clock: ClockSettings,
     /** Jump the content block to a random spot every minute; off keeps it centred with a small shift. */
     moveContent: Boolean,
+    showBattery: Boolean,
     /** Count badge on Notification Icons of apps with more than one notification. */
     showNotificationCount: Boolean,
     closeButtonDismisses: Boolean,
@@ -205,8 +207,10 @@ fun AodScreen(
             AodClock(clock)
             Spacer(Modifier.height(12.dp))
             DateLine(now, remember(clock.zone) { clockZone(clock.zone) })
-            Spacer(Modifier.height(16.dp))
-            BatteryLine()
+            if (showBattery) {
+                Spacer(Modifier.height(16.dp))
+                BatteryLine()
+            }
             Spacer(Modifier.height(40.dp))
             NotificationIconRow(apps, showNotificationCount, onClick = { selectedPackage = it })
         }
@@ -281,12 +285,23 @@ private fun BatteryLine() {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Canvas(Modifier.size(width = 10.dp, height = 18.dp)) {
             val nub = 2.dp.toPx()
+            val stroke = 1.5.dp.toPx()
             drawRect(AodGrey, topLeft = Offset(size.width * 0.3f, 0f), size = Size(size.width * 0.4f, nub))
+            // Outline of the body; a stroke is centred on its path, so inset by half its width.
             drawRoundRect(
                 AodGrey,
-                topLeft = Offset(0f, nub),
-                size = Size(size.width, size.height - nub),
+                topLeft = Offset(stroke / 2, nub + stroke / 2),
+                size = Size(size.width - stroke, size.height - nub - stroke),
                 cornerRadius = CornerRadius(1.5.dp.toPx()),
+                style = Stroke(stroke),
+            )
+            // The level, rising from the bottom, with a small gap inside the outline.
+            val inset = stroke + 1.dp.toPx()
+            val level = (size.height - nub - 2 * inset) * percent.coerceIn(0, 100) / 100f
+            drawRect(
+                AodGrey,
+                topLeft = Offset(inset, size.height - inset - level),
+                size = Size(size.width - 2 * inset, level),
             )
         }
         Text("$percent%", color = AodGrey, fontSize = 22.sp, fontWeight = FontWeight.Light)

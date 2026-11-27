@@ -140,7 +140,7 @@ fun SettingsScreen(store: SettingsStore, resumeCount: Int) {
                                 when (g) {
                                     SettingsGroup.PERMISSIONS -> if (permissions.required) "All required permissions granted" else "Required permissions missing"
                                     SettingsGroup.CLOCK -> clockSummary(settings.clock, system24h)
-                                    SettingsGroup.DISPLAY -> "Brightness, burn-in protection"
+                                    SettingsGroup.DISPLAY -> "Brightness, battery level, burn-in protection"
                                     SettingsGroup.UNLOCK -> "Unlock method, sensor, power button"
                                     SettingsGroup.NOTIFICATIONS -> "Icons, notification window, hidden apps"
                                     SettingsGroup.SHORTCUTS -> "${settings.shortcuts.size}/$MAX_SHORTCUTS apps, layout"
@@ -195,6 +195,20 @@ fun SettingsScreen(store: SettingsStore, resumeCount: Int) {
                         item { SectionHeader("AOD brightness") }
                         item {
                             PercentSlider(settings.brightness, MIN_BRIGHTNESS..1f) { scope.launch { store.setBrightness(it) } }
+                        }
+
+                        item { SectionHeader("Battery level") }
+                        item {
+                            SettingRow(
+                                "Show battery level",
+                                "The battery percentage under the date.",
+                                trailing = {
+                                    Switch(
+                                        checked = settings.showBattery,
+                                        onCheckedChange = { scope.launch { store.setShowBattery(it) } },
+                                    )
+                                },
+                            )
                         }
 
                         item { SectionHeader("Burn-in protection") }
