@@ -30,6 +30,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -55,6 +56,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.core.app.NotificationManagerCompat
@@ -67,6 +69,7 @@ import app.aodkit.MAX_SHORTCUTS
 import app.aodkit.MIN_BRIGHTNESS
 import app.aodkit.ModalCloseAction
 import app.aodkit.PowerButtonAction
+import app.aodkit.R
 import app.aodkit.SettingsStore
 import app.aodkit.ShortcutLayout
 import app.aodkit.UnlockMethod
@@ -489,7 +492,7 @@ fun SettingsScreen(store: SettingsStore, resumeCount: Int) {
 @Composable
 private fun GroupHeader(group: SettingsGroup, onBack: () -> Unit) {
     Row(Modifier.padding(horizontal = 4.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack) { Text("←", style = MaterialTheme.typography.titleLarge) }
+        IconButton(onClick = onBack) { Icon(painterResource(R.drawable.ic_arrow_back), contentDescription = "Back") }
         Text(group.title, Modifier.padding(start = 4.dp), style = MaterialTheme.typography.headlineSmall)
     }
 }
