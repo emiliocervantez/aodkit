@@ -8,8 +8,11 @@ import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -19,8 +22,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -47,8 +51,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.getSystemService
 import androidx.core.net.toUri
@@ -100,7 +107,12 @@ fun SettingsScreen(store: SettingsStore, resumeCount: Int) {
         if (settings == null) return@Scaffold
         // Keyed by page, so each page opens scrolled to the top.
         key(group) {
-            LazyColumn(contentPadding = padding) {
+            val listState = rememberLazyListState()
+            // The Shortcut list mirrors the AOD Screen, where Shortcut #1 sits next to the button, so it is
+            // shown bottom-up: its top is the topmost (vertical) or leftmost (horizontal) icon there.
+            val shownShortcuts = settings.shortcuts.reversed()
+            val reorder = remember(shownShortcuts) { ShortcutReorder(shownShortcuts, listState) }
+            LazyColumn(state = listState, contentPadding = padding) {
                 when (group) {
                     null -> {
                         item { Text("aodkit", Modifier.padding(16.dp), style = MaterialTheme.typography.headlineMedium) }
@@ -272,12 +284,37 @@ fun SettingsScreen(store: SettingsStore, resumeCount: Int) {
                     SettingsGroup.SHORTCUTS -> {
                         item { GroupHeader(SettingsGroup.SHORTCUTS) { group = null } }
                         item { SectionHeader("Shortcuts (${settings.shortcuts.size}/$MAX_SHORTCUTS)") }
-                        itemsIndexed(settings.shortcuts, key = { _, pkg -> pkg }) { index, pkg ->
+                        item {
+                            Text(
+                                "The bottom shortcut sits next to the button.",
+                                Modifier.padding(horizontal = 16.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        items(reorder.order ?: shownShortcuts, key = { it }) { pkg ->
+                            val drop = { reorder.end()?.let { scope.launch { store.setShortcuts(it.reversed()) } } }
                             ShortcutRow(
                                 packageName = pkg,
-                                onUp = if (index > 0) ({ scope.launch { store.setShortcuts(settings.shortcuts.swap(index, index - 1)) } }) else null,
-                                onDown = if (index < settings.shortcuts.lastIndex) ({ scope.launch { store.setShortcuts(settings.shortcuts.swap(index, index + 1)) } }) else null,
                                 onRemove = { scope.launch { store.setShortcuts(settings.shortcuts - pkg) } },
+                                dragHandle = Modifier.pointerInput(reorder) {
+                                    detectVerticalDragGestures(
+                                        onDragStart = { reorder.start(pkg) },
+                                        onDragEnd = { drop() },
+                                        onDragCancel = { drop() },
+                                    ) { change, dy ->
+                                        change.consume()
+                                        reorder.drag(dy)
+                                    }
+                                },
+                                modifier = if (reorder.dragged == pkg) {
+                                    Modifier
+                                        .zIndex(1f)
+                                        .graphicsLayer { translationY = reorder.offset }
+                                        .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                                } else {
+                                    Modifier.animateItem()
+                                },
                             )
                         }
                         item { TextButton(onClick = { picker = Picker.SHORTCUTS }, Modifier.padding(horizontal = 8.dp)) { Text("Choose shortcuts") } }
@@ -516,18 +553,64 @@ private fun SecondsSlider(saved: Int, onSave: (Int) -> Unit) {
 }
 
 @Composable
-private fun ShortcutRow(packageName: String, onUp: (() -> Unit)?, onDown: (() -> Unit)?, onRemove: () -> Unit) {
+private fun ShortcutRow(packageName: String, onRemove: () -> Unit, dragHandle: Modifier, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val label = remember(packageName) { appLabel(context, packageName) }
     Row(
-        Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp),
+        modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Box(dragHandle.size(48.dp), contentAlignment = Alignment.Center) {
+            Text("≡", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         AppIcon(packageName, Modifier.size(36.dp))
         Text(label, Modifier.weight(1f).padding(start = 16.dp))
-        IconButton(onClick = { onUp?.invoke() }, enabled = onUp != null) { Text("↑") }
-        IconButton(onClick = { onDown?.invoke() }, enabled = onDown != null) { Text("↓") }
         IconButton(onClick = onRemove) { Text("✕") }
+    }
+}
+
+/**
+ * Drag-to-reorder for the Shortcut rows. All rows are the same height, so the slot under the finger is
+ * the drag distance divided by the row height, with no hit-testing against a list layout that lags a frame.
+ */
+private class ShortcutReorder(private val shown: List<String>, private val listState: LazyListState) {
+    /** The order shown while dragging and until the store emits the saved one; null shows [shown]. */
+    var order by mutableStateOf<List<String>?>(null)
+        private set
+    var dragged by mutableStateOf<String?>(null)
+        private set
+    private var from = 0
+    private var to = 0
+    private var rowHeight = 0
+    private var distance by mutableFloatStateOf(0f)
+
+    /** Keeps the dragged row under the finger after it has moved to another slot. */
+    val offset get() = distance - (to - from) * rowHeight
+
+    fun start(key: String) {
+        rowHeight = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == key }?.size ?: return
+        from = shown.indexOf(key)
+        to = from
+        distance = 0f
+        dragged = key
+    }
+
+    fun drag(dy: Float) {
+        if (dragged == null) return
+        distance += dy
+        val target = (from + (distance / rowHeight).roundToInt()).coerceIn(0, shown.lastIndex)
+        if (target != to) {
+            to = target
+            order = shown.toMutableList().apply { add(target, removeAt(from)) }
+        }
+    }
+
+    /** Returns the order to save, or null when the row was dropped where it started. */
+    fun end(): List<String>? {
+        if (dragged == null) return null
+        dragged = null
+        if (to == from) order = null
+        return order
     }
 }
 
@@ -615,5 +698,3 @@ private fun loadLaunchableApps(context: Context): List<LaunchableApp> {
         .map { LaunchableApp(it, appLabel(context, it)) }
         .sortedBy { it.label.lowercase() }
 }
-
-private fun <T> List<T>.swap(i: Int, j: Int): List<T> = toMutableList().apply { this[i] = this[j].also { this[j] = this[i] } }

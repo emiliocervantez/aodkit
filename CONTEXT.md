@@ -48,7 +48,7 @@ The button in the bottom-right corner of the **AOD Screen** that reveals the use
 _Avoid_: app drawer, menu button
 
 **Shortcut**:
-An app the user has pinned in settings for quick launch from the **AOD Screen**. Launching it always requires an unlock. At most 8, in a user-defined order.
+An app the user has pinned in settings for quick launch from the **AOD Screen**. Launching it always requires an unlock. At most 10, in a user-defined order.
 _Avoid_: favourite, quick app, pinned app
 
 ## Example dialogue

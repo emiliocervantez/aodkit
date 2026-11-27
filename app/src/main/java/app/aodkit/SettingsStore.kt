@@ -11,7 +11,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-const val MAX_SHORTCUTS = 8
+const val MAX_SHORTCUTS = 10
 
 /** What a power-button press does while the AOD Screen is showing. */
 enum class PowerButtonAction { DISPLAY_OFF, LOCK_SCREEN }
