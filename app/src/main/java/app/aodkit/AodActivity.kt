@@ -136,7 +136,8 @@ class AodActivity : ComponentActivity() {
         super.onStop()
         // Left while the display is still on (home gesture, a call screen on top): don't linger
         // behind, or the next screen-off would be mistaken for a power press on the AOD Screen.
-        if (getSystemService<PowerManager>()?.isInteractive == true) finish()
+        // A configuration-change relaunch also stops us with the display on; that is not leaving.
+        if (!isChangingConfigurations && getSystemService<PowerManager>()?.isInteractive == true) finish()
     }
 
     override fun onDestroy() {
